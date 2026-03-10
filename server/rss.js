@@ -1,8 +1,8 @@
 'use strict';
 
 const Parser = require('rss-parser');
-const { execFile, execSync } = require('child_process');
-const { existsSync } = require('fs');
+const { execFile } = require('child_process');
+const nodeFetch = require('node-fetch');
 
 // Parser pour les flux de podcasts (audiomeans.fr, etc.)
 const parser = new Parser({
@@ -23,7 +23,7 @@ const parser = new Parser({
 });
 
 /**
- * Fetch XML via curl subprocess (bypass TLS fingerprint de Node.js).
+ * Fetch XML via curl subprocess (bypass TLS fingerprint Node.js).
  * Retourne null en cas d'échec.
  */
 function fetchXmlWithCurl(url) {
@@ -44,155 +44,86 @@ function fetchXmlWithCurl(url) {
   });
 }
 
-// ─── Singleton Chromium (Puppeteer-core) pour bypass du JS challenge Cloudflare ─
-
-let _browser = null;
-
 /**
- * Trouve le chemin de Chromium installé par nixpacks ou via une variable d'env.
+ * Fetch XML via services CORS proxy pour les flux europe1.fr bloqués par Cloudflare.
+ * Les proxies (corsproxy.io, allorigins.win) peuvent accéder à europe1.fr depuis leurs serveurs.
+ *
+ * Stratégie identique à podcasts_v2_3.html qui fonctionne en production :
+ *  - Cache-buster injecté dans l'URL cible pour forcer le refetch côté proxy
+ *  - Essai séquentiel : corsproxy.io → allorigins raw → allorigins JSON wrapper
  */
-function findChromiumPath() {
-  // 1. Variables d'environnement explicites
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+async function fetchXmlViaProxy(url) {
+  // Buster par minute — force les proxies à refetcher l'URL source (bypass leur cache interne)
+  const t = Math.floor(Date.now() / 60000);
+  const sep = url.includes('?') ? '&' : '?';
+  const busted = `${url}${sep}_t=${t}`;
+  const enc = encodeURIComponent(busted);
 
-  // 2. Cherche dans le PATH
-  for (const cmd of ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome']) {
+  const proxies = [
+    // 1 — corsproxy.io (prioritaire, pas de cache serveur)
+    async () => {
+      const r = await nodeFetch(`https://corsproxy.io/?url=${enc}`, {
+        timeout: 10000,
+        headers: { 'cache-control': 'no-store' },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      if (!text.includes('<item>')) throw new Error('no <item>');
+      return text;
+    },
+    // 2 — allorigins raw
+    async () => {
+      const r = await nodeFetch(`https://api.allorigins.win/raw?url=${enc}`, { timeout: 10000 });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      if (!text.includes('<item>')) throw new Error('no <item>');
+      return text;
+    },
+    // 3 — allorigins JSON wrapper
+    async () => {
+      const r = await nodeFetch(`https://api.allorigins.win/get?url=${enc}`, { timeout: 10000 });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (!j?.contents) throw new Error('contents vide');
+      if (!j.contents.includes('<item>')) throw new Error('no <item>');
+      return j.contents;
+    },
+  ];
+
+  for (const attempt of proxies) {
     try {
-      const p = execSync(`which ${cmd} 2>/dev/null`, { encoding: 'utf8', timeout: 3000 }).trim();
-      if (p) return p;
-    } catch { /* noop */ }
-  }
-
-  // 3. Chemins courants sur Linux/NixOS
-  for (const p of [
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    '/run/current-system/sw/bin/chromium',
-  ]) {
-    if (existsSync(p)) return p;
-  }
-
-  return null;
-}
-
-/**
- * Retourne (ou démarre) l'instance Puppeteer partagée.
- * Lance un seul navigateur, réutilisé pour tous les fetches.
- */
-async function getBrowser() {
-  if (_browser) {
-    try {
-      await _browser.pages(); // Throws si le navigateur a planté
-      return _browser;
-    } catch {
-      _browser = null;
+      const xml = await attempt();
+      console.log('[rss] proxy OK pour', url);
+      return xml;
+    } catch (e) {
+      console.warn('[rss] proxy failed:', e.message);
     }
   }
 
-  const executablePath = findChromiumPath();
-  if (!executablePath) {
-    throw new Error('Chromium introuvable. Définissez CHROMIUM_PATH ou ajoutez chromium dans nixpacks.toml.');
-  }
-
-  let puppeteer;
-  try {
-    puppeteer = require('puppeteer-core');
-  } catch {
-    throw new Error('puppeteer-core non installé (npm install puppeteer-core).');
-  }
-
-  console.log('[rss] Lancement Chromium:', executablePath);
-  _browser = await puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',   // Évite les crashes sur /dev/shm limité (Railway)
-      '--disable-gpu',
-      '--no-first-run',
-      '--disable-extensions',
-      '--disable-background-networking',
-      '--disable-default-apps',
-      '--mute-audio',
-      '--no-default-browser-check',
-    ],
-  });
-
-  // Auto-reset si le navigateur se déconnecte (crash)
-  _browser.on('disconnected', () => {
-    console.warn('[rss] Chromium déconnecté, réinitialisation.');
-    _browser = null;
-  });
-
-  return _browser;
-}
-
-/**
- * Fetch XML via un vrai Chromium headless pour bypass du JS challenge Cloudflare.
- * Retourne le XML brut, ou null en cas d'échec.
- */
-async function fetchXmlWithBrowser(url) {
-  try {
-    const b = await getBrowser();
-    const page = await b.newPage();
-
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    });
-
-    // Navigation directe — Chrome exécute automatiquement le JS challenge Cloudflare
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 35000 });
-
-    // Extraction du XML.
-    // Après résolution du challenge CF, document.documentElement est la racine RSS/Atom.
-    const xml = await page.evaluate(() => {
-      try {
-        const rootTag = document.documentElement.tagName.toLowerCase();
-        if (rootTag === 'rss' || rootTag === 'feed') {
-          // Document XML propre — on le sérialise
-          return new XMLSerializer().serializeToString(document);
-        }
-        // Toujours sur une page HTML (challenge en cours ou erreur) — retourner le texte brut
-        return document.body ? document.body.innerText : '';
-      } catch {
-        return document.documentElement.outerHTML || '';
-      }
-    });
-
-    await page.close();
-
-    if (xml && xml.includes('<item>')) return xml;
-    return null;
-  } catch (e) {
-    console.error('[rss] browser fetch échoué pour', url, '—', e.message);
-    return null;
-  }
+  console.error('[rss] tous les proxies ont échoué pour', url);
+  return null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
  * Fetch et parse un flux RSS.
- * Pour les flux europe1.fr/rss/ : essaie Chromium en premier (bypass Cloudflare),
- * puis curl comme fallback, puis fetch direct en dernier recours.
+ * Pour les flux europe1.fr/rss/ : passe par des CORS proxies (Cloudflare bypass).
+ * Pour tous les autres (audiomeans.fr, etc.) : fetch direct.
  */
 async function fetchFeed(url) {
   let feed;
 
   if (url.includes('europe1.fr/rss/')) {
-    // 1. Navigateur réel (passe le JS challenge Cloudflare)
-    let xml = await fetchXmlWithBrowser(url);
-    // 2. Fallback curl (TLS bypass, peut suffire selon la config CF)
-    if (!xml) xml = await fetchXmlWithCurl(url);
-    // 3. Fetch direct
+    // Essai via proxies (prouvé fonctionnel dans podcasts_v2_3.html)
+    const xml = await fetchXmlViaProxy(url);
     if (xml) {
       feed = await parser.parseString(xml);
     } else {
-      feed = await parser.parseURL(url);
+      // Dernier recours : curl puis fetch direct (échoueront probablement à cause de Cloudflare)
+      const xmlCurl = await fetchXmlWithCurl(url);
+      if (xmlCurl) feed = await parser.parseString(xmlCurl);
+      else feed = await parser.parseURL(url);
     }
   } else {
     feed = await parser.parseURL(url);
