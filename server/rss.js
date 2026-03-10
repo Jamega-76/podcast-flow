@@ -1,6 +1,7 @@
 'use strict';
 
 const Parser = require('rss-parser');
+const { execFile } = require('child_process');
 
 // Parser pour les flux de podcasts (audiomeans.fr, etc.)
 const parser = new Parser({
@@ -21,10 +22,45 @@ const parser = new Parser({
 });
 
 /**
- * Fetch and parse an RSS feed
+ * Fetch XML via curl subprocess (bypasses Node.js TLS fingerprint detection by Cloudflare).
+ * Falls back to null on failure.
+ */
+function fetchXmlWithCurl(url) {
+  return new Promise((resolve) => {
+    execFile('curl', [
+      '-s',
+      '--max-time', '10',
+      '-L',
+      '-H', 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      '-H', 'Accept: application/rss+xml, application/xml, text/xml, */*',
+      '-H', 'Accept-Language: fr-FR,fr;q=0.9,en;q=0.8',
+      '-H', 'Referer: https://www.europe1.fr/',
+      url,
+    ], { maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+      if (err || !stdout || !stdout.includes('<item>')) return resolve(null);
+      resolve(stdout);
+    });
+  });
+}
+
+/**
+ * Fetch and parse an RSS feed.
+ * For europe1.fr RSS feeds, tries curl first to bypass Cloudflare.
  */
 async function fetchFeed(url) {
-  const feed = await parser.parseURL(url);
+  let feed;
+
+  if (url.includes('europe1.fr/rss/')) {
+    const xml = await fetchXmlWithCurl(url);
+    if (xml) {
+      feed = await parser.parseString(xml);
+    } else {
+      // Fallback to direct fetch (may fail on Cloudflare-protected servers)
+      feed = await parser.parseURL(url);
+    }
+  } else {
+    feed = await parser.parseURL(url);
+  }
 
   return {
     title: feed.title || 'Podcast sans nom',
