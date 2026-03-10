@@ -71,31 +71,20 @@
       <!-- Stats Bar -->
       <div class="stats-bar" id="stats-bar">
         <div class="stat-item">
-          <span class="stat-value" id="stat-feeds">0</span>
-          <span class="stat-label">Flux RSS</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-value" id="stat-episodes">0</span>
-          <span class="stat-label">Épisodes</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
           <span class="stat-value" id="stat-today">0</span>
           <span class="stat-label">Aujourd'hui</span>
         </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-yesterday">0</span>
+          <span class="stat-label">Hier</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-d2">0</span>
+          <span class="stat-label">Avant-hier</span>
+        </div>
       </div>
-
-      <!-- Categories -->
-      <section class="section">
-        <div class="section-header">
-          <h2 class="section-title">Catégories</h2>
-          <button class="btn-view-all" data-target="categories">Voir tout &rsaquo;</button>
-        </div>
-        <div class="categories-grid" id="categories-grid">
-          <!-- Filled by JS -->
-        </div>
-      </section>
 
       <!-- Recent Episodes -->
       <section class="section">
@@ -200,7 +189,7 @@
         <div style="padding: 0 16px">
           <p class="schedule-info">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Les alertes sont envoyées automatiquement aux horaires activés avec le nombre d'épisodes publiés dans les dernières 24h.
+            Les alertes sont envoyées automatiquement aux horaires activés avec le nombre d'épisodes publiés dans la journée en cours.
           </p>
         </div>
       </div>

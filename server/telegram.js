@@ -81,47 +81,57 @@ async function testConnection(token, chatId) {
 
 /**
  * Format and send a podcast summary alert
+ * Filters episodes published TODAY (depuis minuit heure Paris)
  */
 async function sendPodcastAlert(episodes, scheduleTime) {
   if (!config.token || !config.chatId) {
     throw new Error('Telegram not configured');
   }
 
+  // Minuit aujourd'hui en heure Europe/Paris
   const now = new Date();
-  const last24h = episodes.filter(ep => {
+  const todayMidnight = new Date(now.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }).split('/').reverse().join('-') + 'T00:00:00+01:00');
+
+  const todayEps = episodes.filter(ep => {
     const d = new Date(ep.date);
-    return (now - d) < 24 * 60 * 60 * 1000;
+    return d >= todayMidnight && d <= now;
   });
 
-  const total = last24h.length;
-  const timeStr = scheduleTime || now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const total = todayEps.length;
+  const timeStr = scheduleTime || now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+  const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Paris' });
 
   if (total === 0) {
-    const msg = `🎙️ <b>PodcastFlow - ${timeStr}</b>\n\nAucun nouvel épisode dans les dernières 24h.`;
+    const msg = `🎙️ <b>PodcastFlow – ${dateStr}</b>\n⏰ Rapport de ${timeStr}\n\nAucun épisode publié aujourd'hui pour le moment.`;
     await sendMessage(msg);
     return { count: 0, message: msg };
   }
 
-  // Group by feed
+  // Grouper par flux
   const byFeed = {};
-  last24h.forEach(ep => {
+  todayEps.forEach(ep => {
     if (!byFeed[ep.feedName]) byFeed[ep.feedName] = [];
     byFeed[ep.feedName].push(ep);
   });
 
-  const lines = Object.entries(byFeed).map(([feed, eps]) => {
-    const epList = eps.slice(0, 3).map(e => `  • ${truncate(e.title, 60)}`).join('\n');
-    return `📻 <b>${escapeHtml(feed)}</b> (${eps.length} ép.)\n${epList}`;
-  });
+  const lines = Object.entries(byFeed)
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([feed, eps]) => {
+      const epList = eps.slice(0, 2).map(e => `  • ${truncate(e.title, 55)}`).join('\n');
+      return `📻 <b>${escapeHtml(feed)}</b> (${eps.length} ép.)\n${epList}`;
+    });
 
   const msg = [
-    `🎙️ <b>PodcastFlow - ${timeStr}</b>`,
-    `📊 <b>${total} nouvel${total > 1 ? 'aux' : ''} épisode${total > 1 ? 's' : ''}</b> dans les 24 dernières heures\n`,
+    `🎙️ <b>PodcastFlow – ${dateStr}</b>`,
+    `⏰ Rapport de ${timeStr}`,
+    ``,
+    `📊 <b>${total} épisode${total > 1 ? 's' : ''} publié${total > 1 ? 's' : ''} aujourd'hui</b>`,
+    ``,
     lines.join('\n\n'),
   ].join('\n');
 
   await sendMessage(msg);
-  return { count: total, message: `${total} épisode${total > 1 ? 's' : ''} - ${timeStr}` };
+  return { count: total, message: `${total} épisode${total > 1 ? 's' : ''} aujourd'hui – ${timeStr}` };
 }
 
 function truncate(str, maxLen) {

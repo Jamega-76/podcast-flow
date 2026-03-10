@@ -4,6 +4,9 @@
 
 'use strict';
 
+// ===== DATA VERSION (bump to force localStorage reset) =====
+const DATA_VERSION = '2.0';
+
 // ===== STATE =====
 const state = {
   feeds: [],
@@ -11,26 +14,13 @@ const state = {
   alertHistory: [],
   telegramConfig: { token: '', chatId: '', connected: false },
   schedules: [
-    { time: '08:00', label: 'Matin',     enabled: true,  lastSent: null },
-    { time: '10:00', label: 'Matinée',   enabled: true,  lastSent: null },
-    { time: '12:00', label: 'Midi',      enabled: true,  lastSent: null },
-    { time: '16:00', label: 'Après-midi',enabled: true,  lastSent: null },
-    { time: '18:00', label: 'Soir',      enabled: true,  lastSent: null },
-    { time: '20:00', label: 'Soirée',    enabled: true,  lastSent: null },
-  ],
-  categories: [
-    { name: 'Émissions',       icon: '🎙️', count: 0 },
-    { name: 'Info',            icon: '📰', count: 0 },
-    { name: 'Éditos',          icon: '✍️',  count: 0 },
-    { name: 'Interviews',      icon: '🎤', count: 0 },
-    { name: 'Culture',         icon: '🎭', count: 0 },
-    { name: 'Histoire',        icon: '📜', count: 0 },
-    { name: 'Faits divers',    icon: '🔍', count: 0 },
-    { name: 'Divertissement',  icon: '😄', count: 0 },
-    { name: 'Musique',         icon: '🎵', count: 0 },
-    { name: 'Médias',          icon: '📡', count: 0 },
-    { name: 'Sport',           icon: '⚽', count: 0 },
-    { name: 'Économie',        icon: '📈', count: 0 },
+    { time: '08:00', label: 'Matin',      enabled: true,  lastSent: null },
+    { time: '10:00', label: 'Matinée',    enabled: true,  lastSent: null },
+    { time: '12:00', label: 'Midi',       enabled: true,  lastSent: null },
+    { time: '14:00', label: 'Déjeuner',   enabled: true,  lastSent: null },
+    { time: '16:00', label: 'Après-midi', enabled: true,  lastSent: null },
+    { time: '18:00', label: 'Soir',       enabled: true,  lastSent: null },
+    { time: '20:00', label: 'Soirée',     enabled: true,  lastSent: null },
   ],
   popularPodcasts: [],
   defaultFeedsLoaded: false,
@@ -38,6 +28,7 @@ const state = {
 
 // ===== STORAGE =====
 function saveState() {
+  localStorage.setItem('pf_version', DATA_VERSION);
   localStorage.setItem('pf_feeds', JSON.stringify(state.feeds));
   localStorage.setItem('pf_schedules', JSON.stringify(state.schedules));
   localStorage.setItem('pf_telegram', JSON.stringify(state.telegramConfig));
@@ -46,13 +37,26 @@ function saveState() {
 
 function loadState() {
   try {
+    // Migration : si ancienne version, vider les flux pour recharger depuis le serveur
+    const version = localStorage.getItem('pf_version');
+    if (version !== DATA_VERSION) {
+      localStorage.removeItem('pf_feeds');
+      localStorage.removeItem('pf_schedules');
+      localStorage.setItem('pf_version', DATA_VERSION);
+      console.log('🔄 Migration localStorage v' + DATA_VERSION + ' — flux réinitialisés');
+    }
+
     const feeds = localStorage.getItem('pf_feeds');
     if (feeds) state.feeds = JSON.parse(feeds);
 
     const schedules = localStorage.getItem('pf_schedules');
     if (schedules) {
       const saved = JSON.parse(schedules);
-      state.schedules = state.schedules.map((s, i) => saved[i] ? { ...s, ...saved[i] } : s);
+      // Merge en gardant les 7 créneaux définis dans state (y compris 14h)
+      state.schedules = state.schedules.map(s => {
+        const saved_s = saved.find(x => x.time === s.time);
+        return saved_s ? { ...s, ...saved_s } : s;
+      });
     }
 
     const tg = localStorage.getItem('pf_telegram');
@@ -106,50 +110,32 @@ window.closeModal = closeModal;
 // ===== HOME =====
 function refreshHome() {
   updateStats();
-  renderCategories();
   renderFeeds();
   loadEpisodes();
 }
 
-function updateStats() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayEps = state.episodes.filter(e => new Date(e.date) >= today).length;
+// Retourne la date locale (sans heure) sous forme de timestamp
+function dateOnly(d) {
+  const dt = new Date(d);
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+}
 
-  document.getElementById('stat-feeds').textContent = state.feeds.length;
-  document.getElementById('stat-episodes').textContent = state.episodes.length;
-  document.getElementById('stat-today').textContent = todayEps;
+function updateStats() {
+  const now = new Date();
+  const todayTs     = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayTs = todayTs - 86400000;
+  const d2Ts        = todayTs - 2 * 86400000;
+
+  const todayEps     = state.episodes.filter(e => dateOnly(e.date) === todayTs).length;
+  const yesterdayEps = state.episodes.filter(e => dateOnly(e.date) === yesterdayTs).length;
+  const d2Eps        = state.episodes.filter(e => dateOnly(e.date) === d2Ts).length;
+
+  document.getElementById('stat-today').textContent     = todayEps;
+  document.getElementById('stat-yesterday').textContent = yesterdayEps;
+  document.getElementById('stat-d2').textContent        = d2Eps;
   document.getElementById('header-feed-count').textContent =
     `${state.feeds.length} flux actif${state.feeds.length !== 1 ? 's' : ''}`;
 }
-
-// ===== CATEGORIES =====
-function renderCategories() {
-  const counts = {};
-  state.feeds.forEach(f => {
-    counts[f.category] = (counts[f.category] || 0) + 1;
-  });
-
-  state.categories.forEach(c => { c.count = counts[c.name] || 0; });
-
-  const grid = document.getElementById('categories-grid');
-  grid.innerHTML = state.categories.map(cat => `
-    <div class="category-card" onclick="filterByCategory('${cat.name}')">
-      <div class="category-left">
-        <span class="category-icon">${cat.icon}</span>
-        <div>
-          <div class="category-name">${cat.name}</div>
-          <div class="category-count">${cat.count} flux</div>
-        </div>
-      </div>
-      <svg class="category-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-    </div>
-  `).join('');
-}
-
-window.filterByCategory = function(catName) {
-  showToast(`Catégorie: ${catName}`, 'info');
-};
 
 // ===== FEEDS =====
 function renderFeeds() {

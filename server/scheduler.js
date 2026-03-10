@@ -10,6 +10,7 @@ let schedules = [
   { time: '08:00', label: 'Matin',      enabled: true,  cron: '0 8 * * *'  },
   { time: '10:00', label: 'Matinée',    enabled: true,  cron: '0 10 * * *' },
   { time: '12:00', label: 'Midi',       enabled: true,  cron: '0 12 * * *' },
+  { time: '14:00', label: 'Déjeuner',   enabled: true,  cron: '0 14 * * *' },
   { time: '16:00', label: 'Après-midi', enabled: true,  cron: '0 16 * * *' },
   { time: '18:00', label: 'Soir',       enabled: true,  cron: '0 18 * * *' },
   { time: '20:00', label: 'Soirée',     enabled: true,  cron: '0 20 * * *' },
@@ -47,13 +48,12 @@ function setFeeds(newFeeds) {
 }
 
 /**
- * Update schedule configuration from frontend
+ * Update schedule configuration from frontend (matched by time string)
  */
 function updateSchedules(newSchedules) {
-  newSchedules.forEach((s, i) => {
-    if (schedules[i]) {
-      schedules[i].enabled = s.enabled;
-    }
+  newSchedules.forEach((s) => {
+    const found = schedules.find(sc => sc.time === s.time);
+    if (found) found.enabled = s.enabled;
   });
   console.log('📅 Schedules updated:', schedules.map(s => `${s.time}=${s.enabled ? 'ON' : 'OFF'}`).join(' '));
 }
