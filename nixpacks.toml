@@ -1,0 +1,9 @@
+# nixpacks.toml — Railway build config
+# Installe Chromium pour Puppeteer (bypass Cloudflare JS challenge sur europe1.fr)
+
+[phases.setup]
+nixPkgs = ["chromium"]
+
+[variables]
+PUPPETEER_SKIP_DOWNLOAD = "true"
+NODE_ENV = "production"
