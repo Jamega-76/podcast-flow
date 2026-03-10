@@ -113,6 +113,50 @@ app.get('/api/stats', (req, res) => {
 });
 
 /**
+ * GET /api/monitoring
+ * Statut par flux : nb épisodes publiés aujourd'hui + dernier titre
+ */
+app.get('/api/monitoring', (req, res) => {
+  if (episodesCache.episodes.length === 0) {
+    return res.status(503).json({ error: 'Cache en cours d\'initialisation.' });
+  }
+
+  const now = new Date();
+  const t0 = parisMidnight(now, 0);
+
+  // Index des épisodes d'aujourd'hui par feedId
+  const todayByFeed = {};
+  episodesCache.episodes.forEach(e => {
+    const d = new Date(e.date);
+    if (!isNaN(d) && d >= t0 && d < now) {
+      if (!todayByFeed[e.feedId]) todayByFeed[e.feedId] = [];
+      todayByFeed[e.feedId].push(e);
+    }
+  });
+
+  const feeds = MONITORED_FEEDS.map(f => {
+    const eps = todayByFeed[f.id] || [];
+    const last = eps[0] || null; // déjà triés par date desc
+    return {
+      id: f.id,
+      name: f.name,
+      category: f.category,
+      today: eps.length,
+      lastTitle: last ? last.title : null,
+      lastDate: last ? last.date : null,
+    };
+  });
+
+  // Tri : actifs (today > 0) en premier, puis par nom
+  feeds.sort((a, b) => {
+    if (b.today !== a.today) return b.today - a.today;
+    return a.name.localeCompare(b.name, 'fr');
+  });
+
+  res.json({ feeds, updatedAt: new Date(episodesCache.updatedAt).toISOString() });
+});
+
+/**
  * GET /api/episodes/recent
  * Liste complète des épisodes — utilisée par le scheduler Telegram
  */

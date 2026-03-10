@@ -143,9 +143,48 @@ window.refreshStats = async function() {
   if (btn) { btn.style.opacity = '0.4'; btn.disabled = true; }
   setHeaderUpdated('Actualisation…');
   clearTimeout(statsRetryTimer);
-  await loadStats();
+  await Promise.all([loadStats(), loadMonitoring()]);
   if (btn) { btn.style.opacity = ''; btn.disabled = false; }
 };
+
+// ===== MONITORING LIST =====
+async function loadMonitoring() {
+  try {
+    const res = await fetch('/api/monitoring');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderMonitoring(data.feeds);
+  } catch (e) {
+    console.error('loadMonitoring error:', e.message);
+  }
+}
+
+function renderMonitoring(feeds) {
+  const list = document.getElementById('monitoring-list');
+  const counter = document.getElementById('monitoring-active');
+  if (!list) return;
+
+  const activeCount = feeds.filter(f => f.today > 0).length;
+  if (counter) counter.textContent = `${activeCount} / ${feeds.length} actifs`;
+
+  list.innerHTML = feeds.map(f => {
+    const active = f.today > 0;
+    const timeStr = f.lastDate
+      ? new Date(f.lastDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+      : null;
+    return `
+      <div class="monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}">
+        <div class="monitor-dot ${active ? 'dot-green' : 'dot-gray'}"></div>
+        <div class="monitor-info">
+          <span class="monitor-name">${escapeHtml(f.name)}</span>
+          ${timeStr ? `<span class="monitor-time">${timeStr}</span>` : ''}
+        </div>
+        <div class="monitor-badge ${active ? 'badge-active' : 'badge-none'}">
+          ${active ? f.today : '—'}
+        </div>
+      </div>`;
+  }).join('');
+}
 
 // ===== ALERTS =====
 function renderAlerts() {
@@ -348,8 +387,9 @@ if ('serviceWorker' in navigator) {
 loadState();
 connectSSE();
 
-// Affiche la vue Home et charge les stats immédiatement
+// Affiche la vue Home et charge les stats + monitoring immédiatement
 navigateTo('home');
+loadMonitoring();
 
 // Sync Telegram config au serveur
 if (state.telegramConfig.token) {

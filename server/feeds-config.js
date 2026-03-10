@@ -44,7 +44,7 @@ const PODCASTS_E1 = [
   { id: 'e1-36', name: 'Europe 1 Nuit Week-End',                         url: 'https://feeds.audiomeans.fr/feed/1019002c-dd56-48c1-808d-f1d0f5ec1113.xml', category: 'Émissions',   statut: 'comptabilisé' },
   { id: 'e1-37', name: 'La Libre Antenne Week-End',                      url: 'https://feeds.audiomeans.fr/feed/22ed053d-cd0c-4598-babe-8da182bfd557.xml', category: 'Émissions',   statut: 'comptabilisé' },
   { id: 'e1-38', name: 'Le Studio des Légendes',                         url: 'https://feeds.audiomeans.fr/feed/44b11857-392e-491a-ab69-69bd3543ec63.xml', category: 'Culture',     statut: 'comptabilisé' },
-  { id: 'e1-39', name: 'Punchline Week-End (Thierry Cabannes)',           url: 'https://feeds.audiomeans.fr/feed/4be07d58-3177-4e44-8c9a-9ab1eedd2c34.xml', category: 'Émissions',   statut: 'comptabilisé' },
+  { id: 'e1-39', name: 'Punchline Week-End (Thierry Cabannes)',           url: 'https://feeds.audiomeans.fr/feed/94b88208-4cad-42e7-98dc-90a0e411eb65.xml', category: 'Émissions',   statut: 'comptabilisé' },
   { id: 'e1-40', name: "C'est Arrivé Demain",                             url: 'https://feeds.audiomeans.fr/feed/078c3a40-6a61-47ab-bf75-5653f3a1463f.xml', category: 'Émissions',   statut: 'comptabilisé' },
   { id: 'e1-41', name: 'Le Grand Rendez-Vous',                            url: 'https://feeds.audiomeans.fr/feed/ac193b03-3b95-435b-8c37-a01d5eda5d1d.xml', category: 'Émissions',   statut: 'comptabilisé' },
   { id: 'e1-42', name: "En Quête d'Esprit",                               url: 'https://feeds.audiomeans.fr/feed/dbada355-20e2-42ad-8901-6945bd8d4800.xml', category: 'Émissions',   statut: 'comptabilisé' },
