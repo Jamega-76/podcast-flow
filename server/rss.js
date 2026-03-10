@@ -53,6 +53,7 @@ function mapEpisodes(feed, data) {
     feedUrl: feed.url,
     feedName: feed.name,
     category: feed.category || '',
+    type: feed.type || 'podcast',       // 'podcast' | 'article'
     title: item.title || 'Sans titre',
     date: item.isoDate || item.pubDate || null,
     link: item.link || '',

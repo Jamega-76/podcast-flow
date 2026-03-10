@@ -284,37 +284,161 @@ a { color: var(--orange); text-decoration: none; }
 
 .hero-mic { color: var(--orange); opacity: 0.6; }
 
-/* ===== STATS BAR ===== */
-.stats-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
+/* ===== STATS CARD (double : podcasts + articles) ===== */
+.stats-card {
   margin: 0 16px 16px;
-  padding: 14px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
-.stat-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.stats-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 10px;
+}
 
-.stat-value {
+.stats-type-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  width: 90px;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+
+.stats-cols {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  justify-content: space-around;
+}
+
+.stat-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.stat-val {
   font-size: 20px;
   font-weight: 800;
   color: var(--orange);
+  line-height: 1;
 }
 
-.stat-label {
-  font-size: 11px;
+.stat-lbl {
+  font-size: 10px;
   color: var(--text-muted);
   font-weight: 500;
 }
 
-.stat-divider {
+.stat-sep {
   width: 1px;
-  height: 28px;
+  height: 24px;
   background: var(--border);
+  flex-shrink: 0;
 }
+
+.stats-h-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 14px;
+}
+
+/* Ratio bar */
+.ratio-bar-wrap {
+  padding: 10px 14px 12px;
+}
+
+.ratio-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--border);
+  margin-bottom: 6px;
+}
+
+.ratio-bar-pod {
+  height: 100%;
+  background: var(--orange);
+  transition: width 0.6s ease;
+  border-radius: 4px 0 0 4px;
+}
+
+.ratio-bar-art {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.6s ease;
+  border-radius: 0 4px 4px 0;
+}
+
+.ratio-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ===== FILTER TABS ===== */
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.filter-tab {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.filter-tab.active {
+  background: var(--orange-dim);
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.filter-tab:active { opacity: 0.8; }
+
+/* ===== EPISODE TYPE BADGES ===== */
+.episode-type-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  font-size: 12px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 6px;
+  padding: 2px 5px;
+  line-height: 1;
+}
+
+.article-card .episode-thumb-placeholder {
+  background: linear-gradient(135deg, #0f1e3a, #1a2d5a);
+}
+
+/* ===== SECTIONS ===== */
+.section { margin-bottom: 8px; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 12px;
 
 /* ===== SECTIONS ===== */
 .section { margin-bottom: 8px; }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0f0f0f" />
-  <meta name="description" content="Suivez vos flux RSS de podcasts en un tap" />
+  <meta name="description" content="Suivez vos flux RSS de podcasts et articles en un tap" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PodcastFlow" />
@@ -33,7 +33,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <span class="notif-badge" id="notif-badge" style="display:none">0</span>
           </button>
-          <button class="btn-avatar" id="avatar-btn">
+          <button class="btn-avatar" id="avatar-btn" onclick="navigateTo('profile')">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </button>
         </div>
@@ -43,7 +43,7 @@
       <div class="search-container">
         <div class="search-bar">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" id="search-input" placeholder="Rechercher un podcast..." />
+          <input type="text" id="search-input" placeholder="Rechercher un contenu..." />
           <button class="search-clear" id="search-clear" style="display:none">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -54,8 +54,8 @@
       <div class="hero-banner">
         <div class="hero-content">
           <h1 class="hero-title">VOS PODCASTS,<br/>UN TAP SUFFIT !</h1>
-          <p class="hero-subtitle">Suivez, découvrez et soyez alerté en temps réel</p>
-          <button class="btn-explore" id="btn-explore">Explorer</button>
+          <p class="hero-subtitle">Suivez et soyez alerté en temps réel</p>
+          <button class="btn-explore" id="btn-explore">Configurer alertes</button>
         </div>
         <div class="hero-illustration">
           <div class="hero-waveform">
@@ -68,73 +68,83 @@
         </div>
       </div>
 
-      <!-- Stats Bar -->
-      <div class="stats-bar" id="stats-bar">
-        <div class="stat-item">
-          <span class="stat-value" id="stat-today">0</span>
-          <span class="stat-label">Aujourd'hui</span>
+      <!-- Stats Card double (podcasts + articles) -->
+      <div class="stats-card" id="stats-bar">
+        <!-- Podcasts row -->
+        <div class="stats-row">
+          <div class="stats-type-label">🎙️ Épisodes</div>
+          <div class="stats-cols">
+            <div class="stat-col">
+              <span class="stat-val" id="stat-pod-today">0</span>
+              <span class="stat-lbl">Aujourd'hui</span>
+            </div>
+            <div class="stat-sep"></div>
+            <div class="stat-col">
+              <span class="stat-val" id="stat-pod-d1">0</span>
+              <span class="stat-lbl">Hier</span>
+            </div>
+            <div class="stat-sep"></div>
+            <div class="stat-col">
+              <span class="stat-val" id="stat-pod-d2">0</span>
+              <span class="stat-lbl">Avant-hier</span>
+            </div>
+          </div>
         </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-value" id="stat-yesterday">0</span>
-          <span class="stat-label">Hier</span>
+        <div class="stats-h-divider"></div>
+        <!-- Articles row -->
+        <div class="stats-row">
+          <div class="stats-type-label">📰 Articles</div>
+          <div class="stats-cols">
+            <div class="stat-col">
+              <span class="stat-val" id="stat-art-today">0</span>
+              <span class="stat-lbl">Aujourd'hui</span>
+            </div>
+            <div class="stat-sep"></div>
+            <div class="stat-col">
+              <span class="stat-val" id="stat-art-d1">0</span>
+              <span class="stat-lbl">Hier</span>
+            </div>
+            <div class="stat-sep"></div>
+            <div class="stat-col">
+              <span class="stat-val" id="stat-art-d2">0</span>
+              <span class="stat-lbl">Avant-hier</span>
+            </div>
+          </div>
         </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-value" id="stat-d2">0</span>
-          <span class="stat-label">Avant-hier</span>
+        <!-- Ratio bar -->
+        <div class="ratio-bar-wrap">
+          <div class="ratio-bar">
+            <div class="ratio-bar-pod" id="ratio-bar-pod" style="width:50%"></div>
+            <div class="ratio-bar-art" id="ratio-bar-art" style="width:50%"></div>
+          </div>
+          <div class="ratio-labels">
+            <span id="ratio-label-pod">🎙️ 50%</span>
+            <span id="ratio-label-art">📰 50%</span>
+          </div>
         </div>
       </div>
 
-      <!-- Recent Episodes -->
+      <!-- Filter Tabs + Recent Episodes -->
       <section class="section">
         <div class="section-header">
-          <h2 class="section-title">Derniers épisodes</h2>
+          <h2 class="section-title">Derniers contenus</h2>
           <button class="btn-view-all" id="btn-view-all-episodes">Voir tout &rsaquo;</button>
         </div>
+        <!-- Filter Tabs -->
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all"     onclick="setFilter('all')">Tout</button>
+          <button class="filter-tab"        data-filter="podcast" onclick="setFilter('podcast')">🎙️ Épisodes</button>
+          <button class="filter-tab"        data-filter="article" onclick="setFilter('article')">📰 Articles</button>
+        </div>
+        <!-- Episodes Scroll -->
         <div class="episodes-scroll" id="episodes-scroll">
           <div class="episodes-loading">
             <div class="spinner"></div>
-            <p>Chargement des épisodes...</p>
+            <p>Chargement des contenus...</p>
           </div>
         </div>
       </section>
 
-      <!-- My Feeds -->
-      <section class="section">
-        <div class="section-header">
-          <h2 class="section-title">Mes flux RSS</h2>
-          <button class="btn-view-all" id="btn-add-feed">+ Ajouter</button>
-        </div>
-        <div class="feeds-list" id="feeds-list">
-          <div class="empty-state" id="feeds-empty">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
-            <p>Aucun flux RSS ajouté</p>
-            <span>Tapez + Ajouter pour commencer</span>
-          </div>
-        </div>
-      </section>
-
-      <div class="bottom-spacer"></div>
-    </div>
-
-    <!-- ===== DISCOVER VIEW ===== -->
-    <div id="view-discover" class="view">
-      <header class="app-header">
-        <h2 class="page-title">Découvrir</h2>
-      </header>
-      <div class="search-container">
-        <div class="search-bar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" id="discover-search" placeholder="Rechercher des podcasts populaires..." />
-        </div>
-      </div>
-      <div class="section">
-        <h3 class="section-title" style="padding: 0 16px 12px">Podcasts populaires</h3>
-        <div class="popular-grid" id="popular-grid">
-          <!-- Filled by JS -->
-        </div>
-      </div>
       <div class="bottom-spacer"></div>
     </div>
 
@@ -167,7 +177,7 @@
             </div>
             <div class="form-group">
               <label>Chat ID</label>
-              <input type="text" id="telegram-chat-id" placeholder="123456789" />
+              <input type="text" id="telegram-chat-id" placeholder="8699796941" />
             </div>
             <div class="form-group">
               <a class="help-link" href="#" onclick="showTelegramHelp(); return false;">
@@ -175,7 +185,10 @@
                 Comment obtenir mon token et Chat ID ?
               </a>
             </div>
-            <button class="btn-primary" id="btn-save-telegram">Sauvegarder</button>
+            <button class="btn-primary" id="btn-save-telegram">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Sauvegarder
+            </button>
           </div>
         </div>
       </div>
@@ -183,13 +196,11 @@
       <!-- Alert Schedule -->
       <div class="section">
         <h3 class="section-title" style="padding: 0 16px 12px">Horaires d'alerte</h3>
-        <div class="schedule-list" id="schedule-list">
-          <!-- Filled by JS -->
-        </div>
+        <div class="schedule-list" id="schedule-list"></div>
         <div style="padding: 0 16px">
           <p class="schedule-info">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Les alertes sont envoyées automatiquement aux horaires activés avec le nombre d'épisodes publiés dans la journée en cours.
+            Les alertes Telegram donnent le nombre d'épisodes et d'articles publiés dans la journée en cours, avec leur répartition en %.
           </p>
         </div>
       </div>
@@ -222,16 +233,6 @@
       </div>
       <div class="section">
         <div class="settings-list">
-          <div class="settings-item" onclick="exportData()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Exporter mes flux</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-          <div class="settings-item" onclick="importData()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <span>Importer des flux (OPML)</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
           <div class="settings-item" onclick="clearAllData()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             <span>Réinitialiser les données</span>
@@ -241,23 +242,19 @@
       </div>
       <div class="section">
         <div class="app-info-card">
-          <p class="app-info-title">PodcastFlow v1.0.0</p>
+          <p class="app-info-title">PodcastFlow v3.0</p>
           <p class="app-info-sub">Progressive Web App</p>
-          <p class="app-info-sub">Alertes Telegram · Flux RSS</p>
+          <p class="app-info-sub">99 podcasts · 25 articles · Alertes Telegram</p>
         </div>
       </div>
       <div class="bottom-spacer"></div>
     </div>
 
-    <!-- ===== BOTTOM NAVIGATION ===== -->
+    <!-- ===== BOTTOM NAVIGATION (3 items) ===== -->
     <nav class="bottom-nav">
       <button class="nav-item active" data-view="home">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>Accueil</span>
-      </button>
-      <button class="nav-item" data-view="discover">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <span>Découvrir</span>
       </button>
       <button class="nav-item" data-view="alerts">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -268,53 +265,6 @@
         <span>Profil</span>
       </button>
     </nav>
-
-    <!-- ===== ADD FEED MODAL ===== -->
-    <div class="modal-overlay" id="modal-add-feed" style="display:none">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Ajouter un flux RSS</h3>
-          <button class="modal-close" onclick="closeModal('modal-add-feed')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Nom du podcast</label>
-            <input type="text" id="feed-name" placeholder="Ex: France Inter - Le 7/9" />
-          </div>
-          <div class="form-group">
-            <label>URL du flux RSS</label>
-            <input type="url" id="feed-url" placeholder="https://..." />
-          </div>
-          <div class="form-group">
-            <label>Catégorie</label>
-            <select id="feed-category">
-              <option value="Émissions">Émissions</option>
-              <option value="Info">Info</option>
-              <option value="Éditos">Éditos</option>
-              <option value="Interviews">Interviews</option>
-              <option value="Culture">Culture</option>
-              <option value="Histoire">Histoire</option>
-              <option value="Faits divers">Faits divers</option>
-              <option value="Divertissement">Divertissement</option>
-              <option value="Musique">Musique</option>
-              <option value="Médias">Médias</option>
-              <option value="Sport">Sport</option>
-              <option value="Économie">Économie</option>
-            </select>
-          </div>
-          <div id="feed-validate-result" style="display:none"></div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" onclick="closeModal('modal-add-feed')">Annuler</button>
-          <button class="btn-primary" id="btn-validate-feed" onclick="validateAndAddFeed()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            Ajouter
-          </button>
-        </div>
-      </div>
-    </div>
 
     <!-- ===== TELEGRAM HELP MODAL ===== -->
     <div class="modal-overlay" id="modal-telegram-help" style="display:none">
@@ -327,34 +277,10 @@
         </div>
         <div class="modal-body">
           <div class="help-steps">
-            <div class="help-step">
-              <span class="step-num">1</span>
-              <div>
-                <strong>Créer un bot</strong>
-                <p>Ouvrez Telegram, cherchez <code>@BotFather</code>, envoyez <code>/newbot</code> et suivez les instructions.</p>
-              </div>
-            </div>
-            <div class="help-step">
-              <span class="step-num">2</span>
-              <div>
-                <strong>Copier le Token</strong>
-                <p>BotFather vous donnera un token au format <code>123456789:ABCdef...</code></p>
-              </div>
-            </div>
-            <div class="help-step">
-              <span class="step-num">3</span>
-              <div>
-                <strong>Obtenir votre Chat ID</strong>
-                <p>Démarrez votre bot, puis visitez :<br/><code>api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code><br/>Cherchez <code>"chat":{"id": XXXXX}</code></p>
-              </div>
-            </div>
-            <div class="help-step">
-              <span class="step-num">4</span>
-              <div>
-                <strong>Tester</strong>
-                <p>Renseignez le token et Chat ID puis cliquez sur "Tester" dans la vue Alertes.</p>
-              </div>
-            </div>
+            <div class="help-step"><span class="step-num">1</span><div><strong>Créer un bot</strong><p>Ouvrez Telegram, cherchez <code>@BotFather</code>, envoyez <code>/newbot</code>.</p></div></div>
+            <div class="help-step"><span class="step-num">2</span><div><strong>Copier le Token</strong><p>BotFather vous donnera un token au format <code>123456789:ABCdef...</code></p></div></div>
+            <div class="help-step"><span class="step-num">3</span><div><strong>Obtenir votre Chat ID</strong><p>Démarrez votre bot, visitez :<br/><code>api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code><br/>Cherchez <code>"chat":{"id": XXXXX}</code></p></div></div>
+            <div class="help-step"><span class="step-num">4</span><div><strong>Tester</strong><p>Renseignez le token et Chat ID puis cliquez "Sauvegarder".</p></div></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -365,9 +291,6 @@
 
     <!-- ===== TOAST ===== -->
     <div class="toast" id="toast"></div>
-
-    <!-- ===== HIDDEN FILE INPUT ===== -->
-    <input type="file" id="import-file" accept=".opml,.xml" style="display:none" />
 
   </div>
 

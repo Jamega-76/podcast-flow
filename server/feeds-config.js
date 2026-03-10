@@ -107,10 +107,39 @@ const PODCASTS_E1 = [
   { id: 'e1-99', name: 'Dans la bibliothèque',                            url: 'https://feeds.audiomeans.fr/feed/c35816b2-174c-4f9e-9889-6fb86fdd8fe5.xml', category: 'Culture',     statut: 'hors-comptage' },
 ];
 
-// All feeds (podcasts only — source: flux_podcasts_europe1.xlsx)
-const ALL_FEEDS = PODCASTS_E1;
+// ===== ARTICLES EUROPE 1 (25 rubriques) =====
+const ARTICLES_E1 = [
+  { id: 'a1-01', name: 'Société',            url: 'https://www.europe1.fr/rss/societe',              category: 'Société',            type: 'article' },
+  { id: 'a1-02', name: 'Politique',          url: 'https://www.europe1.fr/rss/politique',            category: 'Politique',          type: 'article' },
+  { id: 'a1-03', name: 'Sport',              url: 'https://www.europe1.fr/rss/sport',                category: 'Sport',              type: 'article' },
+  { id: 'a1-04', name: 'Culture',            url: 'https://www.europe1.fr/rss/culture',              category: 'Culture',            type: 'article' },
+  { id: 'a1-05', name: 'Faits divers',       url: 'https://www.europe1.fr/rss/faits-divers',         category: 'Faits divers',       type: 'article' },
+  { id: 'a1-06', name: 'Médias',             url: 'https://www.europe1.fr/rss/medias',               category: 'Médias',             type: 'article' },
+  { id: 'a1-07', name: 'Économie',           url: 'https://www.europe1.fr/rss/economie',             category: 'Économie',           type: 'article' },
+  { id: 'a1-08', name: 'International',      url: 'https://www.europe1.fr/rss/international',        category: 'International',      type: 'article' },
+  { id: 'a1-09', name: 'Santé',              url: 'https://www.europe1.fr/rss/sante',                category: 'Santé',              type: 'article' },
+  { id: 'a1-10', name: 'People',             url: 'https://www.europe1.fr/rss/people',               category: 'People',             type: 'article' },
+  { id: 'a1-11', name: 'Immobilier',         url: 'https://www.europe1.fr/rss/immobilier',           category: 'Immobilier',         type: 'article' },
+  { id: 'a1-12', name: 'Guide shopping',     url: 'https://www.europe1.fr/rss/Guide%20shopping',     category: 'Guide shopping',     type: 'article' },
+  { id: 'a1-13', name: 'Police-Justice',     url: 'https://www.europe1.fr/rss/police%20-%20justice', category: 'Police-Justice',     type: 'article' },
+  { id: 'a1-14', name: 'Sciences',           url: 'https://www.europe1.fr/rss/sciences',             category: 'Sciences',           type: 'article' },
+  { id: 'a1-15', name: 'Environnement',      url: 'https://www.europe1.fr/rss/environnement',        category: 'Environnement',      type: 'article' },
+  { id: 'a1-16', name: 'Technologies',       url: 'https://www.europe1.fr/rss/technologies',         category: 'Technologies',       type: 'article' },
+  { id: 'a1-17', name: 'Animaux',            url: 'https://www.europe1.fr/rss/animaux',              category: 'Animaux',            type: 'article' },
+  { id: 'a1-18', name: 'Cuisine',            url: 'https://www.europe1.fr/rss/cuisine',              category: 'Cuisine',            type: 'article' },
+  { id: 'a1-19', name: 'Maison',             url: 'https://www.europe1.fr/rss/maison',               category: 'Maison',             type: 'article' },
+  { id: 'a1-20', name: 'Lifestyle',          url: 'https://www.europe1.fr/rss/lifestyle',            category: 'Lifestyle',          type: 'article' },
+  { id: 'a1-21', name: 'Insolite',           url: 'https://www.europe1.fr/rss/insolite',             category: 'Insolite',           type: 'article' },
+  { id: 'a1-22', name: 'Horoscope',          url: 'https://www.europe1.fr/rss/horoscope',            category: 'Horoscope',          type: 'article' },
+  { id: 'a1-23', name: 'Météo',              url: 'https://www.europe1.fr/rss/m%C3%A9t%C3%A9o',     category: 'Météo',              type: 'article' },
+  { id: 'a1-24', name: 'Voyage',             url: 'https://www.europe1.fr/rss/voyage',               category: 'Voyage',             type: 'article' },
+  { id: 'a1-25', name: 'Vie professionnelle',url: 'https://www.europe1.fr/rss/vie%20professionnelle',category: 'Vie professionnelle', type: 'article' },
+];
 
-// Feeds to monitor by default (only "comptabilisé" = 86 feeds)
-const DEFAULT_FEEDS = ALL_FEEDS.filter(f => f.statut === 'comptabilisé');
+// All feeds = 99 podcasts + 25 articles = 124 feeds
+const ALL_FEEDS = [...PODCASTS_E1, ...ARTICLES_E1];
 
-module.exports = { PODCASTS_E1, ALL_FEEDS, DEFAULT_FEEDS };
+// Feeds to monitor by default for scheduled alerts (only comptabilisé podcasts)
+const DEFAULT_FEEDS = PODCASTS_E1.filter(f => f.statut === 'comptabilisé');
+
+module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS };

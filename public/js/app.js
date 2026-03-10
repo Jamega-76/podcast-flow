@@ -1,18 +1,19 @@
 /* ============================================
-   PODCASTFLOW - Main Application
+   PODCASTFLOW - Main Application v3.0
    ============================================ */
 
 'use strict';
 
 // ===== DATA VERSION (bump to force localStorage reset) =====
-const DATA_VERSION = '2.0';
+const DATA_VERSION = '3.0';
 
 // ===== STATE =====
 const state = {
   feeds: [],
-  episodes: [],
+  episodes: [],          // tous les contenus (podcasts + articles)
   alertHistory: [],
   telegramConfig: { token: '', chatId: '', connected: false },
+  contentFilter: 'all',  // 'all' | 'podcast' | 'article'
   schedules: [
     { time: '08:00', label: 'Matin',      enabled: true,  lastSent: null },
     { time: '10:00', label: 'Matinée',    enabled: true,  lastSent: null },
@@ -22,7 +23,6 @@ const state = {
     { time: '18:00', label: 'Soir',       enabled: true,  lastSent: null },
     { time: '20:00', label: 'Soirée',     enabled: true,  lastSent: null },
   ],
-  popularPodcasts: [],
   defaultFeedsLoaded: false,
 };
 
@@ -37,13 +37,12 @@ function saveState() {
 
 function loadState() {
   try {
-    // Migration : si ancienne version, vider les flux pour recharger depuis le serveur
     const version = localStorage.getItem('pf_version');
     if (version !== DATA_VERSION) {
       localStorage.removeItem('pf_feeds');
       localStorage.removeItem('pf_schedules');
       localStorage.setItem('pf_version', DATA_VERSION);
-      console.log('🔄 Migration localStorage v' + DATA_VERSION + ' — flux réinitialisés');
+      console.log('🔄 Migration localStorage v' + DATA_VERSION);
     }
 
     const feeds = localStorage.getItem('pf_feeds');
@@ -52,10 +51,9 @@ function loadState() {
     const schedules = localStorage.getItem('pf_schedules');
     if (schedules) {
       const saved = JSON.parse(schedules);
-      // Merge en gardant les 7 créneaux définis dans state (y compris 14h)
       state.schedules = state.schedules.map(s => {
-        const saved_s = saved.find(x => x.time === s.time);
-        return saved_s ? { ...s, ...saved_s } : s;
+        const sv = saved.find(x => x.time === s.time);
+        return sv ? { ...s, ...sv } : s;
       });
     }
 
@@ -76,12 +74,10 @@ function navigateTo(viewName) {
 
   const view = document.getElementById(`view-${viewName}`);
   const navItem = document.querySelector(`.nav-item[data-view="${viewName}"]`);
-
   if (view) view.classList.add('active');
   if (navItem) navItem.classList.add('active');
 
-  if (viewName === 'home') refreshHome();
-  if (viewName === 'discover') renderPopular();
+  if (viewName === 'home')   refreshHome();
   if (viewName === 'alerts') renderAlerts();
 }
 
@@ -96,159 +92,105 @@ function showToast(msg, type = 'info') {
 }
 
 // ===== MODAL =====
-function openModal(id) {
-  const m = document.getElementById(id);
-  if (m) m.style.display = 'flex';
-}
-function closeModal(id) {
-  const m = document.getElementById(id);
-  if (m) m.style.display = 'none';
-}
-
+function openModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'flex'; }
+function closeModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'none'; }
 window.closeModal = closeModal;
 
 // ===== HOME =====
 function refreshHome() {
   updateStats();
-  renderFeeds();
   loadEpisodes();
 }
 
-// Retourne la date locale (sans heure) sous forme de timestamp
 function dateOnly(d) {
   const dt = new Date(d);
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
 }
 
 function updateStats() {
-  const now = new Date();
-  const todayTs     = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const yesterdayTs = todayTs - 86400000;
-  const d2Ts        = todayTs - 2 * 86400000;
+  const now    = new Date();
+  const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const d1Ts    = todayTs - 86400000;
+  const d2Ts    = todayTs - 2 * 86400000;
 
-  const todayEps     = state.episodes.filter(e => dateOnly(e.date) === todayTs).length;
-  const yesterdayEps = state.episodes.filter(e => dateOnly(e.date) === yesterdayTs).length;
-  const d2Eps        = state.episodes.filter(e => dateOnly(e.date) === d2Ts).length;
+  const pods = state.episodes.filter(e => e.type !== 'article');
+  const arts = state.episodes.filter(e => e.type === 'article');
 
-  document.getElementById('stat-today').textContent     = todayEps;
-  document.getElementById('stat-yesterday').textContent = yesterdayEps;
-  document.getElementById('stat-d2').textContent        = d2Eps;
+  const count = (arr, ts) => arr.filter(e => dateOnly(e.date) === ts).length;
+
+  // Podcasts
+  document.getElementById('stat-pod-today').textContent = count(pods, todayTs);
+  document.getElementById('stat-pod-d1').textContent    = count(pods, d1Ts);
+  document.getElementById('stat-pod-d2').textContent    = count(pods, d2Ts);
+
+  // Articles
+  document.getElementById('stat-art-today').textContent = count(arts, todayTs);
+  document.getElementById('stat-art-d1').textContent    = count(arts, d1Ts);
+  document.getElementById('stat-art-d2').textContent    = count(arts, d2Ts);
+
+  // Ratio bar (basé sur le total)
+  const totalToday = count(pods, todayTs) + count(arts, todayTs);
+  const podToday   = count(pods, todayTs);
+  const podPct = totalToday > 0 ? Math.round((podToday / totalToday) * 100) : 50;
+  const artPct = 100 - podPct;
+
+  document.getElementById('ratio-bar-pod').style.width = podPct + '%';
+  document.getElementById('ratio-bar-art').style.width = artPct + '%';
+  document.getElementById('ratio-label-pod').textContent = `🎙️ ${podPct}%`;
+  document.getElementById('ratio-label-art').textContent = `📰 ${artPct}%`;
+
   document.getElementById('header-feed-count').textContent =
     `${state.feeds.length} flux actif${state.feeds.length !== 1 ? 's' : ''}`;
 }
 
-// ===== FEEDS =====
-function renderFeeds() {
-  const list = document.getElementById('feeds-list');
-  const empty = document.getElementById('feeds-empty');
-
-  if (state.feeds.length === 0) {
-    list.innerHTML = '';
-    list.appendChild(empty || createEmptyState());
-    empty && (empty.style.display = 'flex');
-    return;
-  }
-
-  if (empty) empty.style.display = 'none';
-
-  const CAT_ICONS = {
-    'Émissions': '🎙️', 'Info': '📰', 'Éditos': '✍️', 'Interviews': '🎤',
-    'Culture': '🎭', 'Histoire': '📜', 'Faits divers': '🔍',
-    'Divertissement': '😄', 'Musique': '🎵', 'Médias': '📡',
-    'Sport': '⚽', 'Économie': '📈',
-  };
-
-  list.innerHTML = state.feeds.map(feed => {
-    const icon = CAT_ICONS[feed.category] || '🎙️';
-    const newCount = state.episodes.filter(e => e.feedUrl === feed.url && isNew(e.date)).length;
-    return `
-    <div class="feed-item" onclick="showFeedDetail('${feed.id}')">
-      <div class="feed-icon">${icon}</div>
-      <div class="feed-info">
-        <div class="feed-name">${escapeHtml(feed.name)}</div>
-        <div class="feed-meta">${feed.category} · ${timeAgo(feed.lastFetched)}</div>
-      </div>
-      ${newCount > 0 ? `<span class="feed-badge">+${newCount}</span>` : ''}
-      <div class="feed-actions">
-        <button class="feed-delete-btn" onclick="deleteFeed('${feed.id}', event)" title="Supprimer">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-        </button>
-      </div>
-    </div>
-  `}).join('');
-}
-
-function isNew(dateStr) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  const now = new Date();
-  return (now - d) < 24 * 60 * 60 * 1000;
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return 'jamais';
-  const d = new Date(dateStr);
-  const diff = Date.now() - d;
-  if (diff < 60000) return 'à l\'instant';
-  if (diff < 3600000) return `il y a ${Math.floor(diff / 60000)}min`;
-  if (diff < 86400000) return `il y a ${Math.floor(diff / 3600000)}h`;
-  return `il y a ${Math.floor(diff / 86400000)}j`;
-}
-
-window.showFeedDetail = function(id) {
-  const feed = state.feeds.find(f => f.id === id);
-  if (feed) showToast(`${feed.name}`, 'info');
+// ===== FILTER =====
+window.setFilter = function(type) {
+  state.contentFilter = type;
+  document.querySelectorAll('.filter-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === type);
+  });
+  renderFilteredEpisodes();
 };
 
-window.deleteFeed = function(id, event) {
-  event.stopPropagation();
-  state.feeds = state.feeds.filter(f => f.id !== id);
-  state.episodes = state.episodes.filter(e => e.feedId !== id);
-  saveState();
-  renderFeeds();
-  updateStats();
-  showToast('Flux supprimé', 'info');
-};
+function getFilteredEpisodes() {
+  if (state.contentFilter === 'podcast') return state.episodes.filter(e => e.type !== 'article');
+  if (state.contentFilter === 'article') return state.episodes.filter(e => e.type === 'article');
+  return state.episodes;
+}
+
+function renderFilteredEpisodes() {
+  const filtered = getFilteredEpisodes();
+  renderEpisodes(filtered.slice(0, 25));
+}
 
 // ===== EPISODES =====
-// Utilise le cache serveur (/api/episodes/recent) → 1 requête au lieu de 99
 async function loadEpisodes() {
-  if (state.feeds.length === 0) {
-    renderEpisodes([]);
-    return;
-  }
+  if (state.feeds.length === 0) { renderEpisodes([]); return; }
 
   const container = document.getElementById('episodes-scroll');
-  container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des épisodes...</p></div>`;
+  container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des contenus...</p></div>`;
 
   try {
-    // Timeout de 90s pour la première visite à froid
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 90000);
-
     const res = await fetch('/api/episodes/recent', { signal: controller.signal });
     clearTimeout(timeout);
 
     if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`);
     const data = await res.json();
 
-    const allEpisodes = data.episodes || [];
-
-    // Filtrer selon les flux que l'utilisateur a activés
+    const allItems = data.episodes || [];
     const userFeedUrls = new Set(state.feeds.map(f => f.url));
-    const filtered = allEpisodes.filter(e => userFeedUrls.has(e.feedUrl));
+    const filtered = allItems.filter(e => userFeedUrls.has(e.feedUrl));
     filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     state.episodes = filtered;
-
-    // Marquer les flux comme récemment synchronisés
     const updatedAt = data.updatedAt || new Date().toISOString();
     state.feeds.forEach(f => { f.lastFetched = updatedAt; });
 
     saveState();
     updateStats();
-    renderEpisodes(filtered.slice(0, 20));
-    renderFeeds();
+    renderFilteredEpisodes();
 
   } catch (e) {
     console.error('loadEpisodes error:', e.message);
@@ -262,52 +204,31 @@ async function loadEpisodes() {
   }
 }
 
-// Conservé pour usage futur (ajout manuel d'un seul flux)
-async function fetchEpisodes(feed) {
-  try {
-    const res = await fetch(`/api/rss?url=${encodeURIComponent(feed.url)}`);
-    if (!res.ok) throw new Error('RSS fetch failed');
-    const data = await res.json();
-    return (data.items || []).slice(0, 10).map((item, idx) => ({
-      id: `${feed.id}-${idx}`,
-      feedId: feed.id,
-      feedUrl: feed.url,
-      feedName: feed.name,
-      title: item.title || 'Sans titre',
-      date: item.pubDate || item.isoDate || new Date().toISOString(),
-      image: item.itunes?.image || data.image?.url || null,
-      link: item.link || '',
-    }));
-  } catch {
-    return [];
-  }
-}
-
 function renderEpisodes(episodes) {
   const container = document.getElementById('episodes-scroll');
 
   if (episodes.length === 0) {
     container.innerHTML = `
       <div class="empty-state" style="width:100%">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
-        <p>Aucun épisode</p>
-        <span>Ajoutez des flux RSS pour commencer</span>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/></svg>
+        <p>Aucun contenu</p>
+        <span>Aucun résultat pour ce filtre</span>
       </div>`;
     return;
   }
 
   container.innerHTML = episodes.map(ep => {
+    const isArticle = ep.type === 'article';
     const isNewEp = isNew(ep.date);
     return `
-    <div class="episode-card" onclick="openEpisode('${escapeAttr(ep.link)}')">
+    <div class="episode-card ${isArticle ? 'article-card' : ''}" onclick="openEpisode('${escapeAttr(ep.link)}')">
       <div class="episode-thumb">
-        ${ep.image
-          ? `<img src="${escapeAttr(ep.image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'episode-thumb-placeholder\\'><svg width=\\'32\\' height=\\'32\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><rect x=\\'9\\' y=\\'2\\' width=\\'6\\' height=\\'12\\' rx=\\'3\\'/><path d=\\'M19 10a7 7 0 0 1-14 0\\'/></svg></div>'">`
-          : `<div class="episode-thumb-placeholder">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/></svg>
-             </div>`
+        ${ep.image && !isArticle
+          ? `<img src="${escapeAttr(ep.image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'episode-thumb-placeholder\\'>${isArticle ? '📰' : '🎙️'}</div>'">`
+          : `<div class="episode-thumb-placeholder">${isArticle ? '<span style="font-size:28px">📰</span>' : '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/></svg>'}</div>`
         }
         ${isNewEp ? '<span class="episode-new-badge">Nouveau</span>' : ''}
+        <span class="episode-type-badge ${isArticle ? 'badge-article' : 'badge-podcast'}">${isArticle ? '📰' : '🎙️'}</span>
       </div>
       <div class="episode-info">
         <div class="episode-podcast-name">${escapeHtml(ep.feedName)}</div>
@@ -322,163 +243,36 @@ window.openEpisode = function(url) {
   if (url) window.open(url, '_blank', 'noopener');
 };
 
-// ===== ADD FEED =====
-window.validateAndAddFeed = async function() {
-  const name = document.getElementById('feed-name').value.trim();
-  const url = document.getElementById('feed-url').value.trim();
-  const category = document.getElementById('feed-category').value;
-  const resultEl = document.getElementById('feed-validate-result');
-  const btn = document.getElementById('btn-validate-feed');
+function isNew(dateStr) {
+  if (!dateStr) return false;
+  return (Date.now() - new Date(dateStr)) < 24 * 60 * 60 * 1000;
+}
 
-  if (!url) {
-    resultEl.className = 'error';
-    resultEl.textContent = 'Veuillez entrer une URL RSS.';
-    resultEl.style.display = 'block';
-    return;
-  }
-
-  if (state.feeds.some(f => f.url === url)) {
-    resultEl.className = 'error';
-    resultEl.textContent = 'Ce flux est déjà dans votre liste.';
-    resultEl.style.display = 'block';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Validation...`;
-  resultEl.style.display = 'none';
-
-  try {
-    const res = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error('Flux invalide');
-    const data = await res.json();
-
-    const feedName = name || data.title || 'Podcast sans nom';
-    const newFeed = {
-      id: Date.now().toString(),
-      name: feedName,
-      url,
-      category,
-      lastFetched: new Date().toISOString(),
-    };
-
-    state.feeds.push(newFeed);
-    saveState();
-
-    resultEl.className = 'success';
-    resultEl.textContent = `✓ "${feedName}" ajouté avec succès (${data.items?.length || 0} épisodes)`;
-    resultEl.style.display = 'block';
-
-    setTimeout(() => {
-      closeModal('modal-add-feed');
-      document.getElementById('feed-name').value = '';
-      document.getElementById('feed-url').value = '';
-      resultEl.style.display = 'none';
-      renderFeeds();
-      updateStats();
-      loadEpisodes();
-      showToast(`"${feedName}" ajouté !`, 'success');
-    }, 1200);
-  } catch (e) {
-    resultEl.className = 'error';
-    resultEl.textContent = 'Flux RSS invalide ou inaccessible. Vérifiez l\'URL.';
-    resultEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Ajouter`;
-  }
-};
-
-// ===== DEFAULT FEEDS (Europe 1) =====
+// ===== DEFAULT FEEDS (Europe 1 — 124 flux) =====
 async function loadDefaultFeeds() {
   if (state.defaultFeedsLoaded || state.feeds.length > 0) return;
 
   try {
-    const res = await fetch('/api/feeds/default');
+    const res = await fetch('/api/feeds/default?all=1');
     if (!res.ok) return;
     const data = await res.json();
 
-    // Add all feeds with lastFetched = null (will be fetched on demand)
-    state.feeds = data.feeds.map(f => ({
-      ...f,
-      lastFetched: null,
-    }));
+    state.feeds = data.feeds.map(f => ({ ...f, lastFetched: null }));
     state.defaultFeedsLoaded = true;
     saveState();
 
-    // Sync with scheduler
     fetch('/api/feeds', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ feeds: state.feeds }),
     }).catch(() => {});
 
-    renderFeeds();
     updateStats();
     showToast(`${state.feeds.length} flux Europe 1 chargés`, 'success');
   } catch (e) {
     console.warn('Could not load default feeds:', e.message);
   }
 }
-
-// ===== POPULAR PODCASTS (Discover tab — shows all E1 feeds not yet added) =====
-async function renderPopular() {
-  const grid = document.getElementById('popular-grid');
-
-  // Show loading
-  grid.innerHTML = `<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--text-muted)"><div class="spinner" style="margin:0 auto 10px"></div><p>Chargement...</p></div>`;
-
-  try {
-    const res = await fetch('/api/feeds/default');
-    const data = await res.json();
-
-    const catIcons = {
-      'Émissions': '🎙️', 'Info': '📰', 'Éditos': '✍️', 'Interviews': '🎤',
-      'Culture': '🎭', 'Histoire': '📜', 'Faits divers': '🔍',
-      'Divertissement': '😄', 'Musique': '🎵', 'Médias': '📡',
-      'Sport': '⚽', 'Économie': '📈',
-    };
-
-    grid.innerHTML = data.feeds.map((p, i) => {
-      const alreadyAdded = state.feeds.some(f => f.url === p.url);
-      const icon = catIcons[p.category] || '🎙️';
-      return `
-      <div class="popular-card">
-        <div class="popular-thumb">
-          <span style="font-size:28px">${icon}</span>
-          ${!alreadyAdded
-            ? `<button class="popular-add-btn" onclick="addDefaultFeed(${i})" title="Ajouter">+</button>`
-            : `<span class="popular-add-btn" style="background:var(--success);font-size:12px">✓</span>`
-          }
-        </div>
-        <div class="popular-info">
-          <div class="popular-name">${escapeHtml(p.name)}</div>
-          <div class="popular-cat">${p.category}${p.statut === 'hors-comptage' ? ' · hors-comptage' : ''}</div>
-        </div>
-      </div>`;
-    }).join('');
-
-    window._discoverFeeds = data.feeds;
-  } catch {
-    grid.innerHTML = `<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--text-muted)">Impossible de charger les flux.</div>`;
-  }
-}
-
-window.addDefaultFeed = function(index) {
-  const feeds = window._discoverFeeds || [];
-  const p = feeds[index];
-  if (!p) return;
-  if (state.feeds.some(f => f.url === p.url)) {
-    showToast('Déjà dans votre liste', 'info');
-    return;
-  }
-  state.feeds.push({ ...p, lastFetched: null });
-  saveState();
-  renderPopular();
-  showToast(`"${p.name}" ajouté`, 'success');
-};
-
-window.addPopularFeed = window.addDefaultFeed;
 
 // ===== ALERTS =====
 function renderAlerts() {
@@ -489,18 +283,13 @@ function renderAlerts() {
 }
 
 function loadTelegramForm() {
-  if (state.telegramConfig.token) {
-    document.getElementById('telegram-token').value = state.telegramConfig.token;
-  }
-  if (state.telegramConfig.chatId) {
-    document.getElementById('telegram-chat-id').value = state.telegramConfig.chatId;
-  }
+  if (state.telegramConfig.token) document.getElementById('telegram-token').value = state.telegramConfig.token;
+  if (state.telegramConfig.chatId) document.getElementById('telegram-chat-id').value = state.telegramConfig.chatId;
 }
 
 function renderTelegramStatus() {
-  const dot = document.getElementById('telegram-status-dot');
+  const dot  = document.getElementById('telegram-status-dot');
   const text = document.getElementById('telegram-status-text');
-
   if (state.telegramConfig.connected) {
     dot.className = 'telegram-status-dot connected';
     text.textContent = 'Connecté · Chat ID ' + state.telegramConfig.chatId;
@@ -532,11 +321,8 @@ function renderSchedules() {
 
 window.toggleSchedule = function(index, enabled) {
   state.schedules[index].enabled = enabled;
-  const item = document.querySelectorAll('.schedule-item')[index];
-  if (item) item.classList.toggle('active-schedule', enabled);
+  document.querySelectorAll('.schedule-item')[index]?.classList.toggle('active-schedule', enabled);
   saveState();
-
-  // Sync with backend
   fetch('/api/schedules', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -546,7 +332,6 @@ window.toggleSchedule = function(index, enabled) {
 
 function renderHistory() {
   const container = document.getElementById('alert-history');
-
   if (state.alertHistory.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
@@ -555,7 +340,6 @@ function renderHistory() {
       </div>`;
     return;
   }
-
   container.innerHTML = state.alertHistory.slice(0, 10).map(h => `
     <div class="history-item">
       <div class="history-icon">
@@ -570,22 +354,18 @@ function renderHistory() {
   `).join('');
 }
 
-// ===== SAVE TELEGRAM CONFIG =====
+// ===== TELEGRAM CONFIG =====
 document.getElementById('btn-save-telegram').addEventListener('click', async () => {
-  const token = document.getElementById('telegram-token').value.trim();
+  const token  = document.getElementById('telegram-token').value.trim();
   const chatId = document.getElementById('telegram-chat-id').value.trim();
-
-  if (!token || !chatId) {
-    showToast('Veuillez renseigner le token et le Chat ID', 'error');
-    return;
-  }
+  if (!token || !chatId) { showToast('Veuillez renseigner le token et le Chat ID', 'error'); return; }
 
   const btn = document.getElementById('btn-save-telegram');
   btn.disabled = true;
   btn.textContent = 'Test en cours...';
 
   try {
-    const res = await fetch('/api/telegram/test', {
+    const res  = await fetch('/api/telegram/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, chatId }),
@@ -595,14 +375,11 @@ document.getElementById('btn-save-telegram').addEventListener('click', async () 
     if (data.ok) {
       state.telegramConfig = { token, chatId, connected: true };
       saveState();
-
-      // Sync with backend
       await fetch('/api/telegram/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, chatId }),
       });
-
       renderTelegramStatus();
       showToast('Telegram configuré avec succès !', 'success');
     } else {
@@ -611,9 +388,8 @@ document.getElementById('btn-save-telegram').addEventListener('click', async () 
       renderTelegramStatus();
       showToast(`Erreur: ${data.error || 'Token ou Chat ID invalide'}`, 'error');
     }
-  } catch (e) {
-    showToast('Impossible de se connecter au serveur', 'error');
-  } finally {
+  } catch { showToast('Impossible de se connecter au serveur', 'error'); }
+  finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Sauvegarder`;
   }
@@ -621,38 +397,21 @@ document.getElementById('btn-save-telegram').addEventListener('click', async () 
 
 // ===== TEST ALERT =====
 document.getElementById('btn-test-alert').addEventListener('click', async () => {
-  if (!state.telegramConfig.connected) {
-    showToast('Configurez d\'abord Telegram', 'error');
-    return;
-  }
-
+  if (!state.telegramConfig.connected) { showToast('Configurez d\'abord Telegram', 'error'); return; }
   try {
-    const count = state.episodes.filter(e => isNew(e.date)).length;
-    const res = await fetch('/api/alert/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ manual: true }),
-    });
+    const res  = await fetch('/api/alert/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manual: true }) });
     const data = await res.json();
-
     if (data.ok) {
-      const entry = { message: 'Alerte de test envoyée', count, sentAt: new Date().toISOString() };
+      const entry = { message: data.message || 'Alerte envoyée', count: data.count || 0, sentAt: new Date().toISOString() };
       state.alertHistory.unshift(entry);
       saveState();
       renderHistory();
-      showToast(`Alerte envoyée ! (${count} épisodes)`, 'success');
-    } else {
-      showToast('Erreur lors de l\'envoi', 'error');
-    }
-  } catch {
-    showToast('Impossible de se connecter au serveur', 'error');
-  }
+      showToast('Alerte envoyée !', 'success');
+    } else { showToast('Erreur lors de l\'envoi', 'error'); }
+  } catch { showToast('Impossible de se connecter au serveur', 'error'); }
 });
 
-// ===== TELEGRAM HELP =====
-window.showTelegramHelp = function() {
-  openModal('modal-telegram-help');
-};
+window.showTelegramHelp = function() { openModal('modal-telegram-help'); };
 
 // ===== SEARCH =====
 const searchInput = document.getElementById('search-input');
@@ -661,98 +420,28 @@ const searchClear = document.getElementById('search-clear');
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.trim();
   searchClear.style.display = q ? 'flex' : 'none';
-  filterEpisodes(q);
+  if (!q) { renderFilteredEpisodes(); return; }
+  const ql = q.toLowerCase();
+  const results = getFilteredEpisodes().filter(e =>
+    e.title.toLowerCase().includes(ql) || e.feedName.toLowerCase().includes(ql)
+  );
+  renderEpisodes(results.slice(0, 25));
 });
 
 searchClear.addEventListener('click', () => {
   searchInput.value = '';
   searchClear.style.display = 'none';
-  renderEpisodes(state.episodes.slice(0, 15));
+  renderFilteredEpisodes();
 });
-
-function filterEpisodes(query) {
-  if (!query) {
-    renderEpisodes(state.episodes.slice(0, 15));
-    return;
-  }
-  const q = query.toLowerCase();
-  const filtered = state.episodes.filter(e =>
-    e.title.toLowerCase().includes(q) ||
-    e.feedName.toLowerCase().includes(q)
-  );
-  renderEpisodes(filtered.slice(0, 15));
-}
 
 // ===== PROFILE =====
-window.exportData = function() {
-  const data = {
-    feeds: state.feeds,
-    exportedAt: new Date().toISOString(),
-    version: '1.0',
-  };
-  const opml = generateOPML(data.feeds);
-  downloadFile(opml, 'podcastflow-feeds.opml', 'text/xml');
-  showToast('Export OPML téléchargé', 'success');
-};
-
-function generateOPML(feeds) {
-  const items = feeds.map(f =>
-    `  <outline text="${escapeXml(f.name)}" type="rss" xmlUrl="${escapeXml(f.url)}" category="${escapeXml(f.category)}"/>`
-  ).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
-  <head><title>PodcastFlow Export</title></head>
-  <body>\n${items}\n  </body>
-</opml>`;
-}
-
-window.importData = function() {
-  document.getElementById('import-file').click();
-};
-
-document.getElementById('import-file').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  try {
-    const text = await file.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'text/xml');
-    const outlines = doc.querySelectorAll('outline[xmlUrl]');
-
-    let added = 0;
-    outlines.forEach(o => {
-      const url = o.getAttribute('xmlUrl');
-      const name = o.getAttribute('text') || o.getAttribute('title') || 'Podcast';
-      const category = o.getAttribute('category') || 'Autre';
-
-      if (!state.feeds.some(f => f.url === url)) {
-        state.feeds.push({
-          id: Date.now().toString() + Math.random(),
-          name,
-          url,
-          category,
-          lastFetched: null,
-        });
-        added++;
-      }
-    });
-
-    saveState();
-    showToast(`${added} flux importés`, 'success');
-    navigateTo('home');
-  } catch {
-    showToast('Erreur lors de l\'import', 'error');
-  }
-  e.target.value = '';
-});
-
 window.clearAllData = function() {
-  if (!confirm('Supprimer tous vos flux et paramètres ? Cette action est irréversible.')) return;
+  if (!confirm('Réinitialiser toutes les données ? Cette action est irréversible.')) return;
   state.feeds = [];
   state.episodes = [];
   state.alertHistory = [];
   state.telegramConfig = { token: '', chatId: '', connected: false };
+  state.defaultFeedsLoaded = false;
   localStorage.clear();
   refreshHome();
   showToast('Données réinitialisées', 'info');
@@ -763,149 +452,85 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => navigateTo(btn.dataset.view));
 });
 
-document.getElementById('btn-add-feed').addEventListener('click', () => {
-  document.getElementById('feed-name').value = '';
-  document.getElementById('feed-url').value = '';
-  document.getElementById('feed-validate-result').style.display = 'none';
-  openModal('modal-add-feed');
-});
-
-document.getElementById('btn-explore').addEventListener('click', () => navigateTo('discover'));
+document.getElementById('btn-explore').addEventListener('click', () => navigateTo('alerts'));
 document.getElementById('btn-view-all-episodes').addEventListener('click', () => {
-  showToast('Affichage de tous les épisodes', 'info');
+  window.setFilter('all');
+  searchInput.value = '';
+  searchClear.style.display = 'none';
+  renderFilteredEpisodes();
 });
 
-// Close modal on overlay click
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.style.display = 'none';
   });
 });
 
-// ===== SERVER-SENT EVENTS (live updates from server) =====
+// ===== SSE =====
 function connectSSE() {
   try {
     const evtSource = new EventSource('/api/events');
-
     evtSource.addEventListener('alert-sent', (e) => {
       const data = JSON.parse(e.data);
-      state.alertHistory.unshift({
-        message: data.message,
-        count: data.count,
-        sentAt: data.sentAt,
-      });
+      state.alertHistory.unshift({ message: data.message, count: data.count, sentAt: data.sentAt });
       saveState();
-
       const badge = document.getElementById('notif-badge');
-      const currentCount = parseInt(badge.textContent || '0') + 1;
-      badge.textContent = currentCount;
+      badge.textContent = (parseInt(badge.textContent || '0') + 1).toString();
       badge.style.display = 'flex';
-
-      if (document.querySelector('#view-alerts.active')) {
-        renderHistory();
-      }
+      if (document.querySelector('#view-alerts.active')) renderHistory();
     });
-
-    evtSource.addEventListener('error', () => {
-      setTimeout(connectSSE, 5000);
-    });
-  } catch (e) {
-    // SSE not available, skip
-  }
+    evtSource.addEventListener('error', () => setTimeout(connectSSE, 5000));
+  } catch { /* SSE not available */ }
 }
 
 // ===== UTILS =====
 function escapeHtml(str) {
   if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-
 function escapeAttr(str) {
   if (!str) return '';
   return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-
-function escapeXml(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleString('fr-FR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
+    return new Date(dateStr).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch { return dateStr; }
 }
-
-function downloadFile(content, filename, mimeType) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+function timeAgo(dateStr) {
+  if (!dateStr) return 'jamais';
+  const diff = Date.now() - new Date(dateStr);
+  if (diff < 60000) return 'à l\'instant';
+  if (diff < 3600000) return `il y a ${Math.floor(diff / 60000)}min`;
+  if (diff < 86400000) return `il y a ${Math.floor(diff / 3600000)}h`;
+  return `il y a ${Math.floor(diff / 86400000)}j`;
 }
 
 // ===== SERVICE WORKER =====
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
 }
 
 // ===== INIT =====
 loadState();
 connectSSE();
 
-// On first launch (no feeds saved): auto-load all Europe 1 feeds
-loadDefaultFeeds().then(() => {
-  refreshHome();
-});
+loadDefaultFeeds().then(() => refreshHome());
+if (state.feeds.length > 0) refreshHome();
 
-// If feeds already exist, render immediately
-if (state.feeds.length > 0) {
-  refreshHome();
-}
-
-// Sync Telegram config with server
 if (state.telegramConfig.token) {
   fetch('/api/telegram/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      token: state.telegramConfig.token,
-      chatId: state.telegramConfig.chatId,
-    }),
+    body: JSON.stringify({ token: state.telegramConfig.token, chatId: state.telegramConfig.chatId }),
   }).catch(() => {});
 }
 
-// Sync schedules with server
 if (state.schedules) {
   fetch('/api/schedules', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ schedules: state.schedules }),
-  }).catch(() => {});
-}
-
-// Sync feeds with server scheduler
-if (state.feeds.length > 0) {
-  fetch('/api/feeds', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ feeds: state.feeds }),
   }).catch(() => {});
 }

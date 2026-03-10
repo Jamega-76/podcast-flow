@@ -8,7 +8,7 @@ const path = require('path');
 const { fetchFeed, fetchAllFeedsInBatches } = require('./rss');
 const telegram = require('./telegram');
 const scheduler = require('./scheduler');
-const { DEFAULT_FEEDS, ALL_FEEDS } = require('./feeds-config');
+const { DEFAULT_FEEDS, ALL_FEEDS, ARTICLES_E1 } = require('./feeds-config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,9 +24,9 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
   console.log('✅ Telegram configured from .env');
 }
 
-// Pre-load all Europe 1 feeds into the scheduler
-scheduler.setFeeds(DEFAULT_FEEDS);
-console.log(`📡 Pre-loaded ${DEFAULT_FEEDS.length} feeds (Europe 1)`);
+// Pre-load all feeds into the scheduler (podcasts + articles)
+scheduler.setFeeds(ALL_FEEDS);
+console.log(`📡 Pre-loaded ${ALL_FEEDS.length} feeds (${DEFAULT_FEEDS.length} podcasts + ${ARTICLES_E1.length} articles)`);
 
 // ===== EPISODES CACHE =====
 // Shared in-memory cache — refreshed every 10 minutes and pre-warmed on startup
@@ -35,10 +35,13 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function refreshEpisodesCache() {
   try {
-    console.log('🔄 Refreshing episodes cache...');
-    const episodes = await fetchAllFeedsInBatches(DEFAULT_FEEDS, 15);
+    console.log('🔄 Refreshing episodes cache (podcasts + articles)...');
+    // ALL_FEEDS = 99 podcasts + 25 articles = 124 feeds total
+    const episodes = await fetchAllFeedsInBatches(ALL_FEEDS, 15);
     episodesCache = { episodes, updatedAt: Date.now() };
-    console.log(`✅ Episodes cache ready: ${episodes.length} episodes`);
+    const pods = episodes.filter(e => e.type === 'podcast').length;
+    const arts = episodes.filter(e => e.type === 'article').length;
+    console.log(`✅ Cache prêt: ${pods} épisodes + ${arts} articles (total: ${episodes.length})`);
   } catch (err) {
     console.error('❌ Cache refresh error:', err.message);
   }
@@ -220,8 +223,12 @@ app.get('/api/episodes/recent', async (req, res) => {
  * Return the pre-configured Europe 1 feeds (for frontend first-load)
  */
 app.get('/api/feeds/default', (req, res) => {
-  const { statut } = req.query; // optional filter: ?statut=comptabilisé or ?statut=hors-comptage
-  const feeds = statut ? ALL_FEEDS.filter(f => f.statut === statut) : ALL_FEEDS;
+  const { statut, all } = req.query;
+  // ?all=1  → retourne les 124 flux (podcasts + articles)
+  // ?statut=x → filtre par statut dans les podcasts
+  // (défaut) → ALL_FEEDS
+  let feeds = ALL_FEEDS;
+  if (statut) feeds = ALL_FEEDS.filter(f => f.statut === statut);
   res.json({ feeds, total: feeds.length });
 });
 
