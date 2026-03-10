@@ -69,8 +69,9 @@ function navigateTo(viewName) {
   if (view) view.classList.add('active');
   if (navItem) navItem.classList.add('active');
 
-  if (viewName === 'home')   refreshHome();
-  if (viewName === 'alerts') renderAlerts();
+  if (viewName === 'home')     refreshHome();
+  if (viewName === 'articles') refreshArticles();
+  if (viewName === 'alerts')   renderAlerts();
 }
 
 // ===== TOAST =====
@@ -146,6 +147,84 @@ window.refreshStats = async function() {
   await Promise.all([loadStats(), loadMonitoring()]);
   if (btn) { btn.style.opacity = ''; btn.disabled = false; }
 };
+
+// ===== ARTICLES VIEW =====
+let artRetryTimer = null;
+
+window.refreshArticles = async function() {
+  const btn = document.getElementById('btn-refresh-art');
+  if (btn) { btn.style.opacity = '0.4'; btn.disabled = true; }
+  document.getElementById('art-header-updated').textContent = 'Actualisation…';
+  clearTimeout(artRetryTimer);
+  await Promise.all([loadArticleStats(), loadArticleMonitoring()]);
+  if (btn) { btn.style.opacity = ''; btn.disabled = false; }
+};
+
+async function loadArticleStats() {
+  try {
+    const res = await fetch('/api/stats/articles');
+    if (res.status === 503) {
+      document.getElementById('art-header-updated').textContent = 'Initialisation…';
+      artRetryTimer = setTimeout(loadArticleStats, 5000);
+      return;
+    }
+    if (!res.ok) throw new Error(`Erreur ${res.status}`);
+    const data = await res.json();
+    const arts = data.arts || {};
+    document.getElementById('stat-art-today').textContent = arts.today ?? '—';
+    document.getElementById('stat-art-d1').textContent    = arts.d1    ?? '—';
+    document.getElementById('stat-art-d2').textContent    = arts.d2    ?? '—';
+    if (data.updatedAt) {
+      const t = new Date(data.updatedAt);
+      document.getElementById('art-header-updated').textContent =
+        `Mis à jour ${t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}`;
+    }
+  } catch (e) {
+    console.error('loadArticleStats error:', e.message);
+  }
+}
+
+async function loadArticleMonitoring() {
+  try {
+    const res = await fetch('/api/monitoring/articles');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderArticleMonitoring(data.feeds);
+  } catch (e) {
+    console.error('loadArticleMonitoring error:', e.message);
+  }
+}
+
+function renderArticleMonitoring(feeds) {
+  const list = document.getElementById('art-monitoring-list');
+  const counter = document.getElementById('art-monitoring-active');
+  if (!list) return;
+
+  const activeCount = feeds.filter(f => f.today > 0).length;
+  if (counter) counter.textContent = `${activeCount} / ${feeds.length} actifs`;
+
+  list.innerHTML = feeds.map(f => {
+    const active = f.today > 0;
+    const timeStr = f.lastDate
+      ? new Date(f.lastDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+      : null;
+    const nameEl = f.feedUrl
+      ? `<a class="monitor-name monitor-link" href="${escapeHtml(f.feedUrl)}" target="_blank" rel="noopener">${escapeHtml(f.name)}</a>`
+      : `<span class="monitor-name">${escapeHtml(f.name)}</span>`;
+    return `
+      <div class="monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}">
+        <div class="monitor-dot ${active ? 'dot-green' : 'dot-gray'}"></div>
+        <div class="monitor-info">
+          ${nameEl}
+          ${timeStr ? `<span class="monitor-time">${timeStr}</span>` : ''}
+          ${f.lastTitle ? `<span class="monitor-episode">${escapeHtml(f.lastTitle)}</span>` : ''}
+        </div>
+        <div class="monitor-badge ${active ? 'badge-active' : 'badge-none'}">
+          ${active ? f.today : '—'}
+        </div>
+      </div>`;
+  }).join('');
+}
 
 // ===== MONITORING LIST =====
 async function loadMonitoring() {

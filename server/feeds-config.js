@@ -142,8 +142,14 @@ const ALL_FEEDS = [...PODCASTS_E1, ...ARTICLES_E1];
 // Podcasts comptabilisés uniquement (86 flux)
 const DEFAULT_FEEDS = PODCASTS_E1.filter(f => f.statut === 'comptabilisé');
 
-// Feeds surveillés : 86 podcasts comptabilisés + 25 articles = 111 flux
-// Les podcasts "hors-comptage" sont exclus des calculs
-const MONITORED_FEEDS = DEFAULT_FEEDS;
+// Flux articles surveillés (europe1.fr — curl bypass Cloudflare)
+const ARTICLE_FEEDS_V2 = [
+  { id: 'art-01', name: 'Société',       url: 'https://www.europe1.fr/rss/societe',       category: 'Société',       type: 'article' },
+  { id: 'art-02', name: 'Politique',     url: 'https://www.europe1.fr/rss/politique',     category: 'Politique',     type: 'article' },
+  { id: 'art-03', name: 'International', url: 'https://www.europe1.fr/rss/international', category: 'International', type: 'article' },
+];
 
-module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS, MONITORED_FEEDS };
+// Feeds surveillés : 86 podcasts + 3 articles = 89 flux
+const MONITORED_FEEDS = [...DEFAULT_FEEDS, ...ARTICLE_FEEDS_V2];
+
+module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS, ARTICLE_FEEDS_V2, MONITORED_FEEDS };

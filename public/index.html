@@ -76,6 +76,57 @@
       <div class="bottom-spacer"></div>
     </div>
 
+    <!-- ===== ARTICLES VIEW ===== -->
+    <div id="view-articles" class="view">
+      <header class="app-header">
+        <div class="header-left">
+          <span class="header-label">PodcastFlow · Europe 1</span>
+          <div class="header-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
+            <span id="art-header-updated">Chargement…</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn-icon" id="btn-refresh-art" onclick="refreshArticles()" title="Actualiser les articles">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Stats Card articles -->
+      <div class="stats-card" id="art-stats-bar">
+        <div class="stat-today-block">
+          <span class="stat-today-val" id="stat-art-today">—</span>
+          <span class="stat-today-lbl">Aujourd'hui</span>
+        </div>
+        <div class="stat-prev-row">
+          <div class="stat-prev-col">
+            <span class="stat-prev-val" id="stat-art-d1">—</span>
+            <span class="stat-prev-lbl">Hier</span>
+          </div>
+          <div class="stat-prev-sep"></div>
+          <div class="stat-prev-col">
+            <span class="stat-prev-val" id="stat-art-d2">—</span>
+            <span class="stat-prev-lbl">Avant-hier</span>
+          </div>
+        </div>
+        <div class="stats-subtitle">📰 Articles publiés</div>
+      </div>
+
+      <!-- Monitoring articles -->
+      <div class="monitoring-section">
+        <div class="monitoring-header">
+          <span class="monitoring-title">Suivi des flux articles</span>
+          <span class="monitoring-count" id="art-monitoring-active">—</span>
+        </div>
+        <div class="monitoring-list" id="art-monitoring-list">
+          <div class="monitoring-loading">Chargement…</div>
+        </div>
+      </div>
+
+      <div class="bottom-spacer"></div>
+    </div>
+
     <!-- ===== ALERTS VIEW ===== -->
     <div id="view-alerts" class="view">
       <header class="app-header">
@@ -178,11 +229,15 @@
       <div class="bottom-spacer"></div>
     </div>
 
-    <!-- ===== BOTTOM NAVIGATION (3 items) ===== -->
+    <!-- ===== BOTTOM NAVIGATION (4 items) ===== -->
     <nav class="bottom-nav">
       <button class="nav-item active" data-view="home">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span>Accueil</span>
+        <span>Podcasts</span>
+      </button>
+      <button class="nav-item" data-view="articles">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Articles</span>
       </button>
       <button class="nav-item" data-view="alerts">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>

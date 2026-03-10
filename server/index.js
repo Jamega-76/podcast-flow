@@ -8,7 +8,7 @@ const path = require('path');
 const { fetchFeed, fetchAllFeedsInBatches } = require('./rss');
 const telegram = require('./telegram');
 const scheduler = require('./scheduler');
-const { DEFAULT_FEEDS, ARTICLES_E1, MONITORED_FEEDS } = require('./feeds-config');
+const { DEFAULT_FEEDS, ARTICLE_FEEDS_V2, MONITORED_FEEDS } = require('./feeds-config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,9 +24,9 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
   console.log('✅ Telegram configured from .env');
 }
 
-// Monitored feeds: 86 podcasts comptabilisés
+// Monitored feeds: 86 podcasts + 3 articles
 scheduler.setFeeds(MONITORED_FEEDS);
-console.log(`📡 Surveillance: ${DEFAULT_FEEDS.length} podcasts comptabilisés`);
+console.log(`📡 Surveillance: ${DEFAULT_FEEDS.length} podcasts + ${ARTICLE_FEEDS_V2.length} articles`);
 
 // ===== EPISODES CACHE =====
 // Cache partagé en mémoire — rafraîchi toutes les 5 minutes
@@ -35,10 +35,12 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function refreshEpisodesCache() {
   try {
-    console.log('🔄 Rafraîchissement du cache (86 podcasts)...');
+    console.log('🔄 Rafraîchissement du cache (86 podcasts + 3 articles)...');
     const episodes = await fetchAllFeedsInBatches(MONITORED_FEEDS, 15);
     episodesCache = { episodes, updatedAt: Date.now() };
-    console.log(`✅ Cache prêt: ${episodes.length} épisodes`);
+    const pods = episodes.filter(e => e.type !== 'article').length;
+    const arts = episodes.filter(e => e.type === 'article').length;
+    console.log(`✅ Cache prêt: ${pods} épisodes podcast + ${arts} articles`);
   } catch (err) {
     console.error('❌ Cache refresh error:', err.message);
   }
@@ -105,11 +107,79 @@ app.get('/api/stats', (req, res) => {
     return !isNaN(d) && d >= from && d < to;
   }).length;
 
-  const eps = episodesCache.episodes;
+  const pods = episodesCache.episodes.filter(e => e.type !== 'article');
   res.json({
-    pods: { today: cnt(eps, t0, now), d1: cnt(eps, t1, t0), d2: cnt(eps, t2, t1) },
+    pods: { today: cnt(pods, t0, now), d1: cnt(pods, t1, t0), d2: cnt(pods, t2, t1) },
     updatedAt: episodesCache.updatedAt ? new Date(episodesCache.updatedAt).toISOString() : null,
   });
+});
+
+/**
+ * GET /api/stats/articles
+ * Comptages articles J / J-1 / J-2
+ */
+app.get('/api/stats/articles', (req, res) => {
+  if (episodesCache.episodes.length === 0) {
+    return res.status(503).json({ error: 'Cache en cours d\'initialisation, réessayez dans quelques secondes.' });
+  }
+  const now = new Date();
+  const t0 = parisMidnight(now, 0);
+  const t1 = parisMidnight(now, 1);
+  const t2 = parisMidnight(now, 2);
+  const cnt = (arr, from, to) => arr.filter(e => {
+    const d = new Date(e.date);
+    return !isNaN(d) && d >= from && d < to;
+  }).length;
+  const arts = episodesCache.episodes.filter(e => e.type === 'article');
+  res.json({
+    arts: { today: cnt(arts, t0, now), d1: cnt(arts, t1, t0), d2: cnt(arts, t2, t1) },
+    updatedAt: episodesCache.updatedAt ? new Date(episodesCache.updatedAt).toISOString() : null,
+  });
+});
+
+/**
+ * GET /api/monitoring/articles
+ * Statut par flux article : nb articles publiés aujourd'hui + dernier titre
+ */
+app.get('/api/monitoring/articles', (req, res) => {
+  if (episodesCache.episodes.length === 0) {
+    return res.status(503).json({ error: 'Cache en cours d\'initialisation.' });
+  }
+  const now = new Date();
+  const t0 = parisMidnight(now, 0);
+
+  const todayByFeed = {};
+  episodesCache.episodes.filter(e => e.type === 'article').forEach(e => {
+    const d = new Date(e.date);
+    if (!isNaN(d) && d >= t0 && d < now) {
+      if (!todayByFeed[e.feedId]) todayByFeed[e.feedId] = [];
+      todayByFeed[e.feedId].push(e);
+    }
+  });
+
+  const feeds = ARTICLE_FEEDS_V2.map(f => {
+    const eps = todayByFeed[f.id] || [];
+    const last = eps[0] || null;
+    return {
+      id: f.id,
+      name: f.name,
+      category: f.category,
+      today: eps.length,
+      lastDate: last ? last.date : null,
+      lastTitle: last ? last.title : null,
+      lastLink: last ? last.link : null,
+      feedUrl: f.url,
+    };
+  });
+
+  feeds.sort((a, b) => {
+    if (a.lastDate && b.lastDate) return new Date(b.lastDate) - new Date(a.lastDate);
+    if (a.lastDate) return -1;
+    if (b.lastDate) return 1;
+    return a.name.localeCompare(b.name, 'fr');
+  });
+
+  res.json({ feeds, updatedAt: new Date(episodesCache.updatedAt).toISOString() });
 });
 
 /**
