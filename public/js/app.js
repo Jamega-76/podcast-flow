@@ -151,13 +151,19 @@ function renderFeeds() {
 
   if (empty) empty.style.display = 'none';
 
-  const cat = state.categories.find(c => c.name);
+  const CAT_ICONS = {
+    'Émissions': '🎙️', 'Info': '📰', 'Éditos': '✍️', 'Interviews': '🎤',
+    'Culture': '🎭', 'Histoire': '📜', 'Faits divers': '🔍',
+    'Divertissement': '😄', 'Musique': '🎵', 'Médias': '📡',
+    'Sport': '⚽', 'Économie': '📈',
+  };
+
   list.innerHTML = state.feeds.map(feed => {
-    const catInfo = state.categories.find(c => c.name === feed.category);
+    const icon = CAT_ICONS[feed.category] || '🎙️';
     const newCount = state.episodes.filter(e => e.feedUrl === feed.url && isNew(e.date)).length;
     return `
     <div class="feed-item" onclick="showFeedDetail('${feed.id}')">
-      <div class="feed-icon">${catInfo ? catInfo.icon : '🎙️'}</div>
+      <div class="feed-icon">${icon}</div>
       <div class="feed-info">
         <div class="feed-name">${escapeHtml(feed.name)}</div>
         <div class="feed-meta">${feed.category} · ${timeAgo(feed.lastFetched)}</div>
@@ -201,11 +207,11 @@ window.deleteFeed = function(id, event) {
   saveState();
   renderFeeds();
   updateStats();
-  renderCategories();
   showToast('Flux supprimé', 'info');
 };
 
 // ===== EPISODES =====
+// Utilise le cache serveur (/api/episodes/recent) → 1 requête au lieu de 99
 async function loadEpisodes() {
   if (state.feeds.length === 0) {
     renderEpisodes([]);
@@ -213,32 +219,50 @@ async function loadEpisodes() {
   }
 
   const container = document.getElementById('episodes-scroll');
-  container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement...</p></div>`;
+  container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des épisodes...</p></div>`;
 
   try {
-    const results = await Promise.allSettled(
-      state.feeds.map(feed => fetchEpisodes(feed))
-    );
+    // Timeout de 90s pour la première visite à froid
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
 
-    const allEpisodes = [];
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled' && r.value) {
-        allEpisodes.push(...r.value);
-        state.feeds[i].lastFetched = new Date().toISOString();
-      }
-    });
+    const res = await fetch('/api/episodes/recent', { signal: controller.signal });
+    clearTimeout(timeout);
 
-    allEpisodes.sort((a, b) => new Date(b.date) - new Date(a.date));
-    state.episodes = allEpisodes;
+    if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`);
+    const data = await res.json();
+
+    const allEpisodes = data.episodes || [];
+
+    // Filtrer selon les flux que l'utilisateur a activés
+    const userFeedUrls = new Set(state.feeds.map(f => f.url));
+    const filtered = allEpisodes.filter(e => userFeedUrls.has(e.feedUrl));
+    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    state.episodes = filtered;
+
+    // Marquer les flux comme récemment synchronisés
+    const updatedAt = data.updatedAt || new Date().toISOString();
+    state.feeds.forEach(f => { f.lastFetched = updatedAt; });
+
     saveState();
     updateStats();
-    renderEpisodes(allEpisodes.slice(0, 15));
+    renderEpisodes(filtered.slice(0, 20));
     renderFeeds();
+
   } catch (e) {
-    renderEpisodes([]);
+    console.error('loadEpisodes error:', e.message);
+    container.innerHTML = `
+      <div class="empty-state" style="width:100%">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p>Chargement impossible</p>
+        <span>Le serveur initialise les données, réessayez dans quelques secondes.</span>
+        <button onclick="loadEpisodes()" style="margin-top:12px;padding:8px 20px;background:var(--orange);color:#fff;border-radius:20px;border:none;font-size:13px;cursor:pointer">Réessayer</button>
+      </div>`;
   }
 }
 
+// Conservé pour usage futur (ajout manuel d'un seul flux)
 async function fetchEpisodes(feed) {
   try {
     const res = await fetch(`/api/rss?url=${encodeURIComponent(feed.url)}`);
@@ -352,7 +376,6 @@ window.validateAndAddFeed = async function() {
       resultEl.style.display = 'none';
       renderFeeds();
       updateStats();
-      renderCategories();
       loadEpisodes();
       showToast(`"${feedName}" ajouté !`, 'success');
     }, 1200);
@@ -392,7 +415,6 @@ async function loadDefaultFeeds() {
 
     renderFeeds();
     updateStats();
-    renderCategories();
     showToast(`${state.feeds.length} flux Europe 1 chargés`, 'success');
   } catch (e) {
     console.warn('Could not load default feeds:', e.message);

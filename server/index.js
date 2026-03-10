@@ -5,7 +5,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { fetchFeed } = require('./rss');
+const { fetchFeed, fetchAllFeedsInBatches } = require('./rss');
 const telegram = require('./telegram');
 const scheduler = require('./scheduler');
 const { DEFAULT_FEEDS, ALL_FEEDS } = require('./feeds-config');
@@ -27,6 +27,27 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
 // Pre-load all Europe 1 feeds into the scheduler
 scheduler.setFeeds(DEFAULT_FEEDS);
 console.log(`📡 Pre-loaded ${DEFAULT_FEEDS.length} feeds (Europe 1)`);
+
+// ===== EPISODES CACHE =====
+// Shared in-memory cache — refreshed every 10 minutes and pre-warmed on startup
+let episodesCache = { episodes: [], updatedAt: 0 };
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+async function refreshEpisodesCache() {
+  try {
+    console.log('🔄 Refreshing episodes cache...');
+    const episodes = await fetchAllFeedsInBatches(DEFAULT_FEEDS, 15);
+    episodesCache = { episodes, updatedAt: Date.now() };
+    console.log(`✅ Episodes cache ready: ${episodes.length} episodes`);
+  } catch (err) {
+    console.error('❌ Cache refresh error:', err.message);
+  }
+}
+
+// Pre-warm cache 8 seconds after start (let server fully boot first)
+setTimeout(refreshEpisodesCache, 8000);
+// Refresh every 10 minutes
+setInterval(refreshEpisodesCache, CACHE_TTL);
 
 // ===== API ROUTES =====
 
@@ -152,6 +173,46 @@ app.get('/api/events', (req, res) => {
   req.on('close', () => {
     clearInterval(keepAlive);
   });
+});
+
+/**
+ * GET /api/episodes/recent
+ * Return all recent episodes (from cache — refreshed every 10 min)
+ * The frontend uses this single endpoint instead of 99 individual /api/rss calls
+ */
+app.get('/api/episodes/recent', async (req, res) => {
+  // Serve from cache if fresh
+  if (episodesCache.episodes.length > 0 && (Date.now() - episodesCache.updatedAt) < CACHE_TTL) {
+    return res.json({
+      episodes: episodesCache.episodes,
+      total: episodesCache.episodes.length,
+      fromCache: true,
+      updatedAt: new Date(episodesCache.updatedAt).toISOString(),
+    });
+  }
+
+  // Cache miss — fetch now (blocking)
+  try {
+    await refreshEpisodesCache();
+    res.json({
+      episodes: episodesCache.episodes,
+      total: episodesCache.episodes.length,
+      fromCache: false,
+      updatedAt: new Date(episodesCache.updatedAt).toISOString(),
+    });
+  } catch (err) {
+    // Return stale cache if available
+    if (episodesCache.episodes.length > 0) {
+      return res.json({
+        episodes: episodesCache.episodes,
+        total: episodesCache.episodes.length,
+        fromCache: true,
+        stale: true,
+        updatedAt: new Date(episodesCache.updatedAt).toISOString(),
+      });
+    }
+    res.status(503).json({ error: 'Episodes not available yet, retry in a few seconds', episodes: [] });
+  }
 });
 
 /**
