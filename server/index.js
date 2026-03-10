@@ -134,6 +134,12 @@ app.get('/api/monitoring', (req, res) => {
     }
   });
 
+  // Index image par feedId (une seule fois par feed, depuis n'importe quel épisode)
+  const imageByFeed = {};
+  episodesCache.episodes.forEach(e => {
+    if (!imageByFeed[e.feedId] && e.image) imageByFeed[e.feedId] = e.image;
+  });
+
   const feeds = MONITORED_FEEDS.map(f => {
     const eps = todayByFeed[f.id] || [];
     const last = eps[0] || null; // déjà triés par date desc
@@ -142,14 +148,16 @@ app.get('/api/monitoring', (req, res) => {
       name: f.name,
       category: f.category,
       today: eps.length,
-      lastTitle: last ? last.title : null,
       lastDate: last ? last.date : null,
+      image: imageByFeed[f.id] || null,
     };
   });
 
-  // Tri : actifs (today > 0) en premier, puis par nom
+  // Tri : publication la plus récente en premier, sans date à la fin par nom
   feeds.sort((a, b) => {
-    if (b.today !== a.today) return b.today - a.today;
+    if (a.lastDate && b.lastDate) return new Date(b.lastDate) - new Date(a.lastDate);
+    if (a.lastDate) return -1;
+    if (b.lastDate) return 1;
     return a.name.localeCompare(b.name, 'fr');
   });
 
