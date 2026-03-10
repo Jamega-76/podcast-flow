@@ -218,6 +218,39 @@ app.get('/api/events', (req, res) => {
 });
 
 /**
+ * GET /api/debug/articles
+ * Détail par flux article : nb d'articles parsés + dans la journée en cours
+ */
+app.get('/api/debug/articles', (req, res) => {
+  const now = new Date();
+  const t0 = parisMidnight(now, 0);
+
+  const arts = episodesCache.episodes.filter(e => e.type === 'article');
+
+  // Regroupe par feedId
+  const byFeed = {};
+  arts.forEach(e => {
+    if (!byFeed[e.feedId]) byFeed[e.feedId] = { feedId: e.feedId, feedName: e.feedName, total: 0, today: 0 };
+    byFeed[e.feedId].total++;
+    const d = new Date(e.date);
+    if (!isNaN(d) && d >= t0 && d < now) byFeed[e.feedId].today++;
+  });
+
+  const feeds = Object.values(byFeed).sort((a, b) => b.today - a.today);
+  const totalToday = feeds.reduce((s, f) => s + f.today, 0);
+  const totalAll   = feeds.reduce((s, f) => s + f.total, 0);
+
+  res.json({
+    totalToday,
+    totalAll,
+    cacheAge: episodesCache.updatedAt ? Math.round((Date.now() - episodesCache.updatedAt) / 1000) + 's' : 'not ready',
+    feedCount: ARTICLES_E1.length,
+    parsedFeeds: feeds.length,
+    feeds,
+  });
+});
+
+/**
  * GET /api/status
  */
 app.get('/api/status', (req, res) => {
