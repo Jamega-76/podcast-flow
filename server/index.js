@@ -151,6 +151,8 @@ app.get('/api/monitoring', (req, res) => {
       category: f.category,
       today: eps.length,
       lastDate: last ? last.date : null,
+      lastTitle: last ? last.title : null,
+      lastLink: last ? last.link : null,
       image: imageByFeed[f.id] || null,
     };
   });

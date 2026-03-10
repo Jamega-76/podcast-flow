@@ -42,20 +42,21 @@
 
       <!-- Stats Card podcasts -->
       <div class="stats-card" id="stats-bar">
-        <div class="stats-cols">
-          <div class="stat-col">
-            <span class="stat-val" id="stat-pod-today">—</span>
-            <span class="stat-lbl">Aujourd'hui</span>
+        <!-- Aujourd'hui — mis en avant -->
+        <div class="stat-today-block">
+          <span class="stat-today-val" id="stat-pod-today">—</span>
+          <span class="stat-today-lbl">Aujourd'hui</span>
+        </div>
+        <!-- J-1 / J-2 — plus petits -->
+        <div class="stat-prev-row">
+          <div class="stat-prev-col">
+            <span class="stat-prev-val" id="stat-pod-d1">—</span>
+            <span class="stat-prev-lbl">Hier</span>
           </div>
-          <div class="stat-sep"></div>
-          <div class="stat-col">
-            <span class="stat-val" id="stat-pod-d1">—</span>
-            <span class="stat-lbl">Hier</span>
-          </div>
-          <div class="stat-sep"></div>
-          <div class="stat-col">
-            <span class="stat-val" id="stat-pod-d2">—</span>
-            <span class="stat-lbl">Avant-hier</span>
+          <div class="stat-prev-sep"></div>
+          <div class="stat-prev-col">
+            <span class="stat-prev-val" id="stat-pod-d2">—</span>
+            <span class="stat-prev-lbl">Avant-hier</span>
           </div>
         </div>
         <div class="stats-subtitle">🎙️ Épisodes publiés</div>
