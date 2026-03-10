@@ -16,8 +16,88 @@
 <body>
   <div id="app">
 
-    <!-- ===== HOME VIEW ===== -->
-    <div id="view-home" class="view active">
+    <!-- ===== GINETTE VIEW ===== -->
+    <div id="view-ginette" class="view active">
+      <header class="app-header">
+        <div class="header-left">
+          <span class="header-label">PodcastFlow · Europe 1</span>
+          <div class="header-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
+            <span id="ginette-updated">Chargement…</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn-icon" id="btn-refresh-ginette" onclick="refreshGinette()" title="Actualiser">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
+          </button>
+          <button class="btn-icon notif-btn" id="notif-btn" title="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Tug bar Aujourd'hui -->
+      <div class="tug-section">
+        <div class="tug-day-label">Aujourd'hui — <span id="tug-date-today"></span></div>
+        <div class="tug-card">
+          <div class="tug-meta">
+            <div class="tug-side tug-side-pod">
+              <span class="tug-big-num" id="tug-pod-num">—</span>
+              <span class="tug-side-name">🎙️ épisodes</span>
+              <span class="tug-pct-badge tug-pct-pod" id="tug-pod-pct">—</span>
+            </div>
+            <div class="tug-vs">VS</div>
+            <div class="tug-side tug-side-art">
+              <span class="tug-big-num" id="tug-art-num">—</span>
+              <span class="tug-side-name">📰 articles</span>
+              <span class="tug-pct-badge tug-pct-art" id="tug-art-pct">—</span>
+            </div>
+          </div>
+          <div class="tug-track">
+            <div class="tug-fill-pod" id="tug-fill-pod" style="width:50%">
+              <span id="tug-fill-pod-pct"></span>
+            </div>
+            <div class="tug-fill-art" id="tug-fill-art" style="width:50%">
+              <span id="tug-fill-art-pct"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tug bar Hier -->
+      <div class="tug-section">
+        <div class="tug-day-label">Hier — <span id="tug-date-yest"></span></div>
+        <div class="tug-card">
+          <div class="tug-meta">
+            <div class="tug-side tug-side-pod">
+              <span class="tug-big-num" id="tug-pod-num-y">—</span>
+              <span class="tug-side-name">🎙️ épisodes</span>
+              <span class="tug-pct-badge tug-pct-pod" id="tug-pod-pct-y">—</span>
+            </div>
+            <div class="tug-vs">VS</div>
+            <div class="tug-side tug-side-art">
+              <span class="tug-big-num" id="tug-art-num-y">—</span>
+              <span class="tug-side-name">📰 articles</span>
+              <span class="tug-pct-badge tug-pct-art" id="tug-art-pct-y">—</span>
+            </div>
+          </div>
+          <div class="tug-track">
+            <div class="tug-fill-pod" id="tug-fill-pod-y" style="width:50%">
+              <span id="tug-fill-pod-pct-y"></span>
+            </div>
+            <div class="tug-fill-art" id="tug-fill-art-y" style="width:50%">
+              <span id="tug-fill-art-pct-y"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-spacer"></div>
+    </div>
+
+    <!-- ===== PODCASTS VIEW ===== -->
+    <div id="view-home" class="view">
       <header class="app-header">
         <div class="header-left">
           <span class="header-label">PodcastFlow · Europe 1</span>
@@ -30,24 +110,15 @@
           <button class="btn-icon" id="btn-refresh" onclick="refreshStats()" title="Actualiser les données">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
           </button>
-          <button class="btn-icon notif-btn" id="notif-btn" title="Notifications">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <span class="notif-badge" id="notif-badge" style="display:none">0</span>
-          </button>
-          <button class="btn-avatar" id="avatar-btn" onclick="navigateTo('profile')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </button>
         </div>
       </header>
 
       <!-- Stats Card podcasts -->
       <div class="stats-card" id="stats-bar">
-        <!-- Aujourd'hui — mis en avant -->
         <div class="stat-today-block">
           <span class="stat-today-val" id="stat-pod-today">—</span>
           <span class="stat-today-lbl">Aujourd'hui</span>
         </div>
-        <!-- J-1 / J-2 — plus petits -->
         <div class="stat-prev-row">
           <div class="stat-prev-col">
             <span class="stat-prev-val" id="stat-pod-d1">—</span>
@@ -198,40 +269,18 @@
       <div class="bottom-spacer"></div>
     </div>
 
-    <!-- ===== PROFILE VIEW ===== -->
-    <div id="view-profile" class="view">
-      <header class="app-header">
-        <h2 class="page-title">Profil</h2>
-      </header>
-      <div class="profile-section">
-        <div class="profile-avatar-large">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <h2 class="profile-name">Utilisateur</h2>
-        <p class="profile-subtitle">Gérez vos préférences</p>
-      </div>
-      <div class="section">
-        <div class="settings-list">
-          <div class="settings-item" onclick="clearAllData()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            <span>Réinitialiser les données</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-        </div>
-      </div>
-      <div class="section">
-        <div class="app-info-card">
-          <p class="app-info-title">PodcastFlow v4.0</p>
-          <p class="app-info-sub">Progressive Web App</p>
-          <p class="app-info-sub">86 podcasts comptabilisés · Alertes Telegram</p>
-        </div>
-      </div>
-      <div class="bottom-spacer"></div>
-    </div>
-
     <!-- ===== BOTTOM NAVIGATION (4 items) ===== -->
     <nav class="bottom-nav">
-      <button class="nav-item active" data-view="home">
+      <button class="nav-item active" data-view="ginette">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="3" x2="12" y2="21"/>
+          <polyline points="4 6 12 3 20 6"/>
+          <path d="M4 6v7a4 4 0 0 0 8 0V6"/>
+          <path d="M12 6v7a4 4 0 0 0 8 0V6"/>
+        </svg>
+        <span>Ginette</span>
+      </button>
+      <button class="nav-item" data-view="home">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>Podcasts</span>
       </button>
@@ -242,10 +291,6 @@
       <button class="nav-item" data-view="alerts">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span>Alertes</span>
-      </button>
-      <button class="nav-item" data-view="profile">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span>Profil</span>
       </button>
     </nav>
 

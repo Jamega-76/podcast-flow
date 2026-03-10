@@ -69,6 +69,7 @@ function navigateTo(viewName) {
   if (view) view.classList.add('active');
   if (navItem) navItem.classList.add('active');
 
+  if (viewName === 'ginette')  refreshGinette();
   if (viewName === 'home')     refreshHome();
   if (viewName === 'articles') refreshArticles();
   if (viewName === 'alerts')   renderAlerts();
@@ -88,6 +89,80 @@ function showToast(msg, type = 'info') {
 function openModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'flex'; }
 function closeModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'none'; }
 window.closeModal = closeModal;
+
+// ===== GINETTE =====
+let ginetteRetryTimer = null;
+
+window.refreshGinette = async function() {
+  const btn = document.getElementById('btn-refresh-ginette');
+  if (btn) { btn.style.opacity = '0.4'; btn.disabled = true; }
+  document.getElementById('ginette-updated').textContent = 'Actualisation…';
+  clearTimeout(ginetteRetryTimer);
+  await loadGinetteStats();
+  if (btn) { btn.style.opacity = ''; btn.disabled = false; }
+};
+
+async function loadGinetteStats() {
+  try {
+    const [podRes, artRes] = await Promise.all([
+      fetch('/api/stats'),
+      fetch('/api/stats/articles'),
+    ]);
+
+    if (podRes.status === 503 || artRes.status === 503) {
+      document.getElementById('ginette-updated').textContent = 'Initialisation…';
+      ginetteRetryTimer = setTimeout(loadGinetteStats, 5000);
+      return;
+    }
+
+    const pod = await podRes.json();
+    const art = await artRes.json();
+
+    // Labels de dates
+    const now  = new Date();
+    const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+    const fmtDate = (d) => d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('tug-date-today').textContent = fmtDate(now);
+    document.getElementById('tug-date-yest').textContent  = fmtDate(yest);
+
+    // Mise à jour des deux tug bars
+    updateTug(pod.pods.today, art.arts.today, '');    // J
+    updateTug(pod.pods.d1,    art.arts.d1,    '-y');  // J-1
+
+    const hm = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('ginette-updated').textContent = `Mis à jour ${hm}`;
+  } catch (e) {
+    console.error('loadGinetteStats error:', e.message);
+    document.getElementById('ginette-updated').textContent = 'Erreur de chargement';
+  }
+}
+
+function updateTug(pods, arts, suffix) {
+  const total = pods + arts;
+  document.getElementById(`tug-pod-num${suffix}`).textContent = pods;
+  document.getElementById(`tug-art-num${suffix}`).textContent = arts;
+
+  if (total === 0) {
+    document.getElementById(`tug-pod-pct${suffix}`).textContent = '—';
+    document.getElementById(`tug-art-pct${suffix}`).textContent = '—';
+    document.getElementById(`tug-fill-pod${suffix}`).style.width = '50%';
+    document.getElementById(`tug-fill-art${suffix}`).style.width = '50%';
+    document.getElementById(`tug-fill-pod-pct${suffix}`).textContent = '';
+    document.getElementById(`tug-fill-art-pct${suffix}`).textContent = '';
+    return;
+  }
+
+  const podPct = Math.round((pods / total) * 100);
+  const artPct = 100 - podPct;
+
+  document.getElementById(`tug-pod-pct${suffix}`).textContent = podPct + '%';
+  document.getElementById(`tug-art-pct${suffix}`).textContent = artPct + '%';
+  document.getElementById(`tug-fill-pod${suffix}`).style.width = podPct + '%';
+  document.getElementById(`tug-fill-art${suffix}`).style.width = artPct + '%';
+  // Affiche le % dans la barre seulement si elle est assez large
+  document.getElementById(`tug-fill-pod-pct${suffix}`).textContent = podPct >= 20 ? podPct + '%' : '';
+  document.getElementById(`tug-fill-art-pct${suffix}`).textContent = artPct >= 20 ? artPct + '%' : '';
+}
 
 // ===== HOME =====
 function refreshHome() {
@@ -413,13 +488,12 @@ document.getElementById('btn-test-alert').addEventListener('click', async () => 
 
 window.showTelegramHelp = function() { openModal('modal-telegram-help'); };
 
-// ===== PROFILE =====
 window.clearAllData = function() {
   if (!confirm('Réinitialiser toutes les données ? Cette action est irréversible.')) return;
   state.alertHistory = [];
   state.telegramConfig = { token: '', chatId: '', connected: false };
   localStorage.clear();
-  navigateTo('home');
+  navigateTo('ginette');
   showToast('Données réinitialisées', 'info');
 };
 
@@ -475,8 +549,8 @@ if ('serviceWorker' in navigator) {
 loadState();
 connectSSE();
 
-// Affiche la vue Home et charge les stats + monitoring immédiatement
-navigateTo('home');
+// Démarre sur Ginette, charge le monitoring podcasts en parallèle
+navigateTo('ginette');
 loadMonitoring();
 
 // Sync Telegram config au serveur

@@ -14,6 +14,9 @@
   --orange: #f97316;
   --orange-dark: #ea6c0a;
   --orange-light: #fb923c;
+
+  --blue: #60a5fa;
+  --blue-dim: rgba(96, 165, 250, 0.15);
   --orange-dim: rgba(249, 115, 22, 0.15);
   --orange-glow: rgba(249, 115, 22, 0.25);
 
@@ -849,3 +852,116 @@ a { color: var(--orange); text-decoration: none; }
 
 /* ===== MISC ===== */
 .bottom-spacer { height: 16px; }
+
+/* ===== GINETTE — TUG BAR ===== */
+.tug-section {
+  margin: 12px 16px 0;
+}
+
+.tug-day-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
+.tug-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 20px 18px;
+}
+
+.tug-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.tug-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.tug-side-art { align-items: flex-end; }
+
+.tug-big-num {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.tug-side-pod .tug-big-num { color: var(--orange); }
+.tug-side-art .tug-big-num { color: var(--blue); }
+
+.tug-side-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.tug-vs {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0 14px;
+  flex-shrink: 0;
+}
+
+.tug-pct-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+}
+.tug-pct-pod {
+  background: var(--orange-dim);
+  color: var(--orange);
+}
+.tug-pct-art {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.tug-track {
+  display: flex;
+  height: 26px;
+  border-radius: 100px;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+
+.tug-fill-pod {
+  background: var(--orange);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  transition: width 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+}
+.tug-fill-art {
+  background: var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 8px;
+  transition: width 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+}
+.tug-fill-pod span,
+.tug-fill-art span {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
