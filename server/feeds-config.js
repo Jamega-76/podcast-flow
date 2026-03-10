@@ -139,7 +139,11 @@ const ARTICLES_E1 = [
 // All feeds = 99 podcasts + 25 articles = 124 feeds
 const ALL_FEEDS = [...PODCASTS_E1, ...ARTICLES_E1];
 
-// Feeds to monitor by default for scheduled alerts (only comptabilisé podcasts)
+// Podcasts comptabilisés uniquement (86 flux)
 const DEFAULT_FEEDS = PODCASTS_E1.filter(f => f.statut === 'comptabilisé');
 
-module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS };
+// Feeds surveillés : 86 podcasts comptabilisés + 25 articles = 111 flux
+// Les podcasts "hors-comptage" sont exclus des calculs
+const MONITORED_FEEDS = [...DEFAULT_FEEDS, ...ARTICLES_E1];
+
+module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS, MONITORED_FEEDS };

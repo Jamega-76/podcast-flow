@@ -1,19 +1,17 @@
 /* ============================================
-   PODCASTFLOW - Main Application v3.0
+   PODCASTFLOW - Main Application v4.0
+   Stats uniquement : podcasts comptabilisés + articles
    ============================================ */
 
 'use strict';
 
-// ===== DATA VERSION (bump to force localStorage reset) =====
-const DATA_VERSION = '3.0';
+// ===== DATA VERSION (bump = reset localStorage) =====
+const DATA_VERSION = '4.0';
 
 // ===== STATE =====
 const state = {
-  feeds: [],
-  episodes: [],          // tous les contenus (podcasts + articles)
   alertHistory: [],
   telegramConfig: { token: '', chatId: '', connected: false },
-  contentFilter: 'all',  // 'all' | 'podcast' | 'article'
   schedules: [
     { time: '08:00', label: 'Matin',      enabled: true,  lastSent: null },
     { time: '10:00', label: 'Matinée',    enabled: true,  lastSent: null },
@@ -23,13 +21,11 @@ const state = {
     { time: '18:00', label: 'Soir',       enabled: true,  lastSent: null },
     { time: '20:00', label: 'Soirée',     enabled: true,  lastSent: null },
   ],
-  defaultFeedsLoaded: false,
 };
 
 // ===== STORAGE =====
 function saveState() {
   localStorage.setItem('pf_version', DATA_VERSION);
-  localStorage.setItem('pf_feeds', JSON.stringify(state.feeds));
   localStorage.setItem('pf_schedules', JSON.stringify(state.schedules));
   localStorage.setItem('pf_telegram', JSON.stringify(state.telegramConfig));
   localStorage.setItem('pf_history', JSON.stringify(state.alertHistory.slice(0, 50)));
@@ -39,14 +35,10 @@ function loadState() {
   try {
     const version = localStorage.getItem('pf_version');
     if (version !== DATA_VERSION) {
-      localStorage.removeItem('pf_feeds');
-      localStorage.removeItem('pf_schedules');
+      localStorage.clear();
       localStorage.setItem('pf_version', DATA_VERSION);
       console.log('🔄 Migration localStorage v' + DATA_VERSION);
     }
-
-    const feeds = localStorage.getItem('pf_feeds');
-    if (feeds) state.feeds = JSON.parse(feeds);
 
     const schedules = localStorage.getItem('pf_schedules');
     if (schedules) {
@@ -98,40 +90,50 @@ window.closeModal = closeModal;
 
 // ===== HOME =====
 function refreshHome() {
-  updateStats();
-  loadEpisodes();
+  loadStats();
 }
 
-function dateOnly(d) {
-  const dt = new Date(d);
-  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+// ===== STATS =====
+let statsRetryTimer = null;
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+
+    if (res.status === 503) {
+      // Cache serveur pas encore prêt — réessai automatique dans 5 secondes
+      setHeaderUpdated('Initialisation…');
+      clearTimeout(statsRetryTimer);
+      statsRetryTimer = setTimeout(loadStats, 5000);
+      return;
+    }
+
+    if (!res.ok) throw new Error(`Erreur ${res.status}`);
+
+    const data = await res.json();
+    updateStats(data);
+  } catch (e) {
+    console.error('loadStats error:', e.message);
+    setHeaderUpdated('Erreur de chargement');
+  }
 }
 
-function updateStats() {
-  const now    = new Date();
-  const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const d1Ts    = todayTs - 86400000;
-  const d2Ts    = todayTs - 2 * 86400000;
+function updateStats(data) {
+  const pods = data.pods || {};
+  const arts = data.arts || {};
 
-  const pods = state.episodes.filter(e => e.type !== 'article');
-  const arts = state.episodes.filter(e => e.type === 'article');
+  // Comptages J / J-1 / J-2
+  document.getElementById('stat-pod-today').textContent = pods.today ?? '—';
+  document.getElementById('stat-pod-d1').textContent    = pods.d1    ?? '—';
+  document.getElementById('stat-pod-d2').textContent    = pods.d2    ?? '—';
 
-  const count = (arr, ts) => arr.filter(e => dateOnly(e.date) === ts).length;
+  document.getElementById('stat-art-today').textContent = arts.today ?? '—';
+  document.getElementById('stat-art-d1').textContent    = arts.d1    ?? '—';
+  document.getElementById('stat-art-d2').textContent    = arts.d2    ?? '—';
 
-  // Podcasts
-  document.getElementById('stat-pod-today').textContent = count(pods, todayTs);
-  document.getElementById('stat-pod-d1').textContent    = count(pods, d1Ts);
-  document.getElementById('stat-pod-d2').textContent    = count(pods, d2Ts);
-
-  // Articles
-  document.getElementById('stat-art-today').textContent = count(arts, todayTs);
-  document.getElementById('stat-art-d1').textContent    = count(arts, d1Ts);
-  document.getElementById('stat-art-d2').textContent    = count(arts, d2Ts);
-
-  // Ratio bar (basé sur le total)
-  const totalToday = count(pods, todayTs) + count(arts, todayTs);
-  const podToday   = count(pods, todayTs);
-  const podPct = totalToday > 0 ? Math.round((podToday / totalToday) * 100) : 50;
+  // Ratio bar (basé sur la journée en cours)
+  const total = (pods.today ?? 0) + (arts.today ?? 0);
+  const podPct = total > 0 ? Math.round(((pods.today ?? 0) / total) * 100) : 50;
   const artPct = 100 - podPct;
 
   document.getElementById('ratio-bar-pod').style.width = podPct + '%';
@@ -139,145 +141,28 @@ function updateStats() {
   document.getElementById('ratio-label-pod').textContent = `🎙️ ${podPct}%`;
   document.getElementById('ratio-label-art').textContent = `📰 ${artPct}%`;
 
-  document.getElementById('header-feed-count').textContent =
-    `${state.feeds.length} flux actif${state.feeds.length !== 1 ? 's' : ''}`;
+  // Horodatage dans le header
+  if (data.updatedAt) {
+    const t = new Date(data.updatedAt);
+    setHeaderUpdated(`Mis à jour ${t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}`);
+  } else {
+    setHeaderUpdated('Données chargées');
+  }
 }
 
-// ===== FILTER =====
-window.setFilter = function(type) {
-  state.contentFilter = type;
-  document.querySelectorAll('.filter-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.filter === type);
-  });
-  renderFilteredEpisodes();
+function setHeaderUpdated(text) {
+  const el = document.getElementById('header-updated');
+  if (el) el.textContent = text;
+}
+
+window.refreshStats = async function() {
+  const btn = document.getElementById('btn-refresh');
+  if (btn) { btn.style.opacity = '0.4'; btn.disabled = true; }
+  setHeaderUpdated('Actualisation…');
+  clearTimeout(statsRetryTimer);
+  await loadStats();
+  if (btn) { btn.style.opacity = ''; btn.disabled = false; }
 };
-
-function getFilteredEpisodes() {
-  if (state.contentFilter === 'podcast') return state.episodes.filter(e => e.type !== 'article');
-  if (state.contentFilter === 'article') return state.episodes.filter(e => e.type === 'article');
-  return state.episodes;
-}
-
-function renderFilteredEpisodes() {
-  const filtered = getFilteredEpisodes();
-  renderEpisodes(filtered.slice(0, 25));
-}
-
-// ===== EPISODES =====
-async function loadEpisodes() {
-  const container = document.getElementById('episodes-scroll');
-
-  if (state.feeds.length === 0) {
-    // Flux pas encore chargés — garder le spinner le temps que loadDefaultFeeds() s'exécute
-    container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des flux...</p></div>`;
-    return;
-  }
-  container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des contenus...</p></div>`;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 90000);
-    const res = await fetch('/api/episodes/recent', { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`);
-    const data = await res.json();
-
-    const allItems = data.episodes || [];
-    const userFeedUrls = new Set(state.feeds.map(f => f.url));
-    const filtered = allItems.filter(e => userFeedUrls.has(e.feedUrl));
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    state.episodes = filtered;
-    const updatedAt = data.updatedAt || new Date().toISOString();
-    state.feeds.forEach(f => { f.lastFetched = updatedAt; });
-
-    saveState();
-    updateStats();
-    renderFilteredEpisodes();
-
-  } catch (e) {
-    console.error('loadEpisodes error:', e.message);
-    container.innerHTML = `
-      <div class="empty-state" style="width:100%">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <p>Chargement impossible</p>
-        <span>Le serveur initialise les données, réessayez dans quelques secondes.</span>
-        <button onclick="loadEpisodes()" style="margin-top:12px;padding:8px 20px;background:var(--orange);color:#fff;border-radius:20px;border:none;font-size:13px;cursor:pointer">Réessayer</button>
-      </div>`;
-  }
-}
-
-function renderEpisodes(episodes) {
-  const container = document.getElementById('episodes-scroll');
-
-  if (episodes.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state" style="width:100%">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/></svg>
-        <p>Aucun contenu</p>
-        <span>Aucun résultat pour ce filtre</span>
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = episodes.map(ep => {
-    const isArticle = ep.type === 'article';
-    const isNewEp = isNew(ep.date);
-    return `
-    <div class="episode-card ${isArticle ? 'article-card' : ''}" onclick="openEpisode('${escapeAttr(ep.link)}')">
-      <div class="episode-thumb">
-        ${ep.image && !isArticle
-          ? `<img src="${escapeAttr(ep.image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'episode-thumb-placeholder\\'>${isArticle ? '📰' : '🎙️'}</div>'">`
-          : `<div class="episode-thumb-placeholder">${isArticle ? '<span style="font-size:28px">📰</span>' : '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/></svg>'}</div>`
-        }
-        ${isNewEp ? '<span class="episode-new-badge">Nouveau</span>' : ''}
-        <span class="episode-type-badge ${isArticle ? 'badge-article' : 'badge-podcast'}">${isArticle ? '📰' : '🎙️'}</span>
-      </div>
-      <div class="episode-info">
-        <div class="episode-podcast-name">${escapeHtml(ep.feedName)}</div>
-        <div class="episode-title">${escapeHtml(ep.title)}</div>
-        <div class="episode-date">${formatDate(ep.date)}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-window.openEpisode = function(url) {
-  if (url) window.open(url, '_blank', 'noopener');
-};
-
-function isNew(dateStr) {
-  if (!dateStr) return false;
-  return (Date.now() - new Date(dateStr)) < 24 * 60 * 60 * 1000;
-}
-
-// ===== DEFAULT FEEDS (Europe 1 — 124 flux) =====
-async function loadDefaultFeeds() {
-  if (state.defaultFeedsLoaded || state.feeds.length > 0) return;
-
-  try {
-    const res = await fetch('/api/feeds/default?all=1');
-    if (!res.ok) return;
-    const data = await res.json();
-
-    state.feeds = data.feeds.map(f => ({ ...f, lastFetched: null }));
-    state.defaultFeedsLoaded = true;
-    saveState();
-
-    fetch('/api/feeds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feeds: state.feeds }),
-    }).catch(() => {});
-
-    updateStats();
-    showToast(`${state.feeds.length} flux Europe 1 chargés`, 'success');
-    loadEpisodes(); // déclenche le chargement des épisodes maintenant que les flux sont prêts
-  } catch (e) {
-    console.warn('Could not load default feeds:', e.message);
-  }
-}
 
 // ===== ALERTS =====
 function renderAlerts() {
@@ -418,52 +303,19 @@ document.getElementById('btn-test-alert').addEventListener('click', async () => 
 
 window.showTelegramHelp = function() { openModal('modal-telegram-help'); };
 
-// ===== SEARCH =====
-const searchInput = document.getElementById('search-input');
-const searchClear = document.getElementById('search-clear');
-
-searchInput.addEventListener('input', () => {
-  const q = searchInput.value.trim();
-  searchClear.style.display = q ? 'flex' : 'none';
-  if (!q) { renderFilteredEpisodes(); return; }
-  const ql = q.toLowerCase();
-  const results = getFilteredEpisodes().filter(e =>
-    e.title.toLowerCase().includes(ql) || e.feedName.toLowerCase().includes(ql)
-  );
-  renderEpisodes(results.slice(0, 25));
-});
-
-searchClear.addEventListener('click', () => {
-  searchInput.value = '';
-  searchClear.style.display = 'none';
-  renderFilteredEpisodes();
-});
-
 // ===== PROFILE =====
 window.clearAllData = function() {
   if (!confirm('Réinitialiser toutes les données ? Cette action est irréversible.')) return;
-  state.feeds = [];
-  state.episodes = [];
   state.alertHistory = [];
   state.telegramConfig = { token: '', chatId: '', connected: false };
-  state.defaultFeedsLoaded = false;
   localStorage.clear();
-  refreshHome();
-  loadDefaultFeeds(); // recharge les flux Europe 1 automatiquement
+  navigateTo('home');
   showToast('Données réinitialisées', 'info');
 };
 
 // ===== NAVIGATION EVENTS =====
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => navigateTo(btn.dataset.view));
-});
-
-document.getElementById('btn-explore').addEventListener('click', () => navigateTo('alerts'));
-document.getElementById('btn-view-all-episodes').addEventListener('click', () => {
-  window.setFilter('all');
-  searchInput.value = '';
-  searchClear.style.display = 'none';
-  renderFilteredEpisodes();
 });
 
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -494,23 +346,14 @@ function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-function escapeAttr(str) {
-  if (!str) return '';
-  return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(dateStr).toLocaleString('fr-FR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
   } catch { return dateStr; }
-}
-function timeAgo(dateStr) {
-  if (!dateStr) return 'jamais';
-  const diff = Date.now() - new Date(dateStr);
-  if (diff < 60000) return 'à l\'instant';
-  if (diff < 3600000) return `il y a ${Math.floor(diff / 60000)}min`;
-  if (diff < 86400000) return `il y a ${Math.floor(diff / 3600000)}h`;
-  return `il y a ${Math.floor(diff / 86400000)}j`;
 }
 
 // ===== SERVICE WORKER =====
@@ -522,13 +365,10 @@ if ('serviceWorker' in navigator) {
 loadState();
 connectSSE();
 
-// Affiche la vue Home et charge les épisodes selon l'état courant
+// Affiche la vue Home et charge les stats immédiatement
 navigateTo('home');
 
-// Premier lancement : charge les 124 flux Europe 1, puis déclenche loadEpisodes()
-// Retours suivants : state.feeds.length > 0 → skip immédiat
-loadDefaultFeeds();
-
+// Sync Telegram config au serveur
 if (state.telegramConfig.token) {
   fetch('/api/telegram/config', {
     method: 'POST',
@@ -537,6 +377,7 @@ if (state.telegramConfig.token) {
   }).catch(() => {});
 }
 
+// Sync schedules au serveur
 if (state.schedules) {
   fetch('/api/schedules', {
     method: 'POST',

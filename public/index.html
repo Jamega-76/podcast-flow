@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0f0f0f" />
-  <meta name="description" content="Suivez vos flux RSS de podcasts et articles en un tap" />
+  <meta name="description" content="Tableau de bord podcasts & articles Europe 1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PodcastFlow" />
@@ -18,17 +18,18 @@
 
     <!-- ===== HOME VIEW ===== -->
     <div id="view-home" class="view active">
-      <!-- Header -->
       <header class="app-header">
         <div class="header-left">
-          <span class="header-label">Vos Podcasts</span>
+          <span class="header-label">PodcastFlow · Europe 1</span>
           <div class="header-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
-            <span id="header-feed-count">0 flux actifs</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
+            <span id="header-updated">Chargement…</span>
           </div>
         </div>
         <div class="header-actions">
+          <button class="btn-icon" id="btn-refresh" onclick="refreshStats()" title="Actualiser les données">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.93"/></svg>
+          </button>
           <button class="btn-icon notif-btn" id="notif-btn" title="Notifications">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <span class="notif-badge" id="notif-badge" style="display:none">0</span>
@@ -39,79 +40,54 @@
         </div>
       </header>
 
-      <!-- Search Bar -->
-      <div class="search-container">
-        <div class="search-bar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" id="search-input" placeholder="Rechercher un contenu..." />
-          <button class="search-clear" id="search-clear" style="display:none">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Hero Banner -->
-      <div class="hero-banner">
-        <div class="hero-content">
-          <h1 class="hero-title">VOS PODCASTS,<br/>UN TAP SUFFIT !</h1>
-          <p class="hero-subtitle">Suivez et soyez alerté en temps réel</p>
-          <button class="btn-explore" id="btn-explore">Configurer alertes</button>
-        </div>
-        <div class="hero-illustration">
-          <div class="hero-waveform">
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
-          </div>
-          <div class="hero-mic">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
-          </div>
-        </div>
-      </div>
-
       <!-- Stats Card double (podcasts + articles) -->
       <div class="stats-card" id="stats-bar">
+
         <!-- Podcasts row -->
         <div class="stats-row">
           <div class="stats-type-label">🎙️ Épisodes</div>
           <div class="stats-cols">
             <div class="stat-col">
-              <span class="stat-val" id="stat-pod-today">0</span>
+              <span class="stat-val" id="stat-pod-today">—</span>
               <span class="stat-lbl">Aujourd'hui</span>
             </div>
             <div class="stat-sep"></div>
             <div class="stat-col">
-              <span class="stat-val" id="stat-pod-d1">0</span>
+              <span class="stat-val" id="stat-pod-d1">—</span>
               <span class="stat-lbl">Hier</span>
             </div>
             <div class="stat-sep"></div>
             <div class="stat-col">
-              <span class="stat-val" id="stat-pod-d2">0</span>
+              <span class="stat-val" id="stat-pod-d2">—</span>
               <span class="stat-lbl">Avant-hier</span>
             </div>
           </div>
         </div>
+
         <div class="stats-h-divider"></div>
+
         <!-- Articles row -->
         <div class="stats-row">
           <div class="stats-type-label">📰 Articles</div>
           <div class="stats-cols">
             <div class="stat-col">
-              <span class="stat-val" id="stat-art-today">0</span>
+              <span class="stat-val" id="stat-art-today">—</span>
               <span class="stat-lbl">Aujourd'hui</span>
             </div>
             <div class="stat-sep"></div>
             <div class="stat-col">
-              <span class="stat-val" id="stat-art-d1">0</span>
+              <span class="stat-val" id="stat-art-d1">—</span>
               <span class="stat-lbl">Hier</span>
             </div>
             <div class="stat-sep"></div>
             <div class="stat-col">
-              <span class="stat-val" id="stat-art-d2">0</span>
+              <span class="stat-val" id="stat-art-d2">—</span>
               <span class="stat-lbl">Avant-hier</span>
             </div>
           </div>
         </div>
-        <!-- Ratio bar -->
+
+        <!-- Ratio bar (aujourd'hui uniquement) -->
         <div class="ratio-bar-wrap">
           <div class="ratio-bar">
             <div class="ratio-bar-pod" id="ratio-bar-pod" style="width:50%"></div>
@@ -122,28 +98,8 @@
             <span id="ratio-label-art">📰 50%</span>
           </div>
         </div>
-      </div>
 
-      <!-- Filter Tabs + Recent Episodes -->
-      <section class="section">
-        <div class="section-header">
-          <h2 class="section-title">Derniers contenus</h2>
-          <button class="btn-view-all" id="btn-view-all-episodes">Voir tout &rsaquo;</button>
-        </div>
-        <!-- Filter Tabs -->
-        <div class="filter-tabs">
-          <button class="filter-tab active" data-filter="all"     onclick="setFilter('all')">Tout</button>
-          <button class="filter-tab"        data-filter="podcast" onclick="setFilter('podcast')">🎙️ Épisodes</button>
-          <button class="filter-tab"        data-filter="article" onclick="setFilter('article')">📰 Articles</button>
-        </div>
-        <!-- Episodes Scroll -->
-        <div class="episodes-scroll" id="episodes-scroll">
-          <div class="episodes-loading">
-            <div class="spinner"></div>
-            <p>Chargement des contenus...</p>
-          </div>
-        </div>
-      </section>
+      </div>
 
       <div class="bottom-spacer"></div>
     </div>
@@ -242,9 +198,9 @@
       </div>
       <div class="section">
         <div class="app-info-card">
-          <p class="app-info-title">PodcastFlow v3.0</p>
+          <p class="app-info-title">PodcastFlow v4.0</p>
           <p class="app-info-sub">Progressive Web App</p>
-          <p class="app-info-sub">99 podcasts · 25 articles · Alertes Telegram</p>
+          <p class="app-info-sub">86 podcasts comptabilisés · 25 articles · Alertes Telegram</p>
         </div>
       </div>
       <div class="bottom-spacer"></div>
