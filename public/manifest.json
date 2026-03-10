@@ -1,0 +1,35 @@
+{
+  "name": "PodcastFlow",
+  "short_name": "PodcastFlow",
+  "description": "Suivez vos flux RSS de podcasts en temps réel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#0f0f0f",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "fr",
+  "categories": ["news", "entertainment"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Alertes",
+      "url": "/?view=alerts",
+      "description": "Gérer les alertes Telegram"
+    }
+  ]
+}

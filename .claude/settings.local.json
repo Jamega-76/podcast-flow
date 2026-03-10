@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node generate-icons.js)",
+      "Read(//usr/local/**)",
+      "Read(//Users/jlassiri/.nvm/versions/**)",
+      "Bash(python3 -c \":*)"
+    ]
+  }
+}
