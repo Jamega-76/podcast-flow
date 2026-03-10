@@ -212,7 +212,7 @@ app.get('/api/monitoring', (req, res) => {
     }
   });
 
-  const feeds = MONITORED_FEEDS.map(f => {
+  const feeds = DEFAULT_FEEDS.map(f => {
     const eps = todayByFeed[f.id] || [];
     const last = eps[0] || null; // déjà triés par date desc
     return {
@@ -365,7 +365,7 @@ app.get('/api/debug/articles', (req, res) => {
     totalToday,
     totalAll,
     cacheAge: episodesCache.updatedAt ? Math.round((Date.now() - episodesCache.updatedAt) / 1000) + 's' : 'not ready',
-    feedCount: ARTICLES_E1.length,
+    feedCount: ARTICLE_FEEDS_V2.length,
     parsedFeeds: feeds.length,
     feeds,
   });

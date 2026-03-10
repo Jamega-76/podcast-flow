@@ -23,6 +23,35 @@ const state = {
   ],
 };
 
+// ===== ARTICLE FEEDS (client-side list — mirrors server/feeds-config ARTICLE_FEEDS_V2) =====
+const ARTICLE_FEEDS_CLIENT = [
+  { id: 'art-01', name: 'Société',             url: 'https://www.europe1.fr/rss/societe',               category: 'Société' },
+  { id: 'art-02', name: 'Politique',           url: 'https://www.europe1.fr/rss/politique',             category: 'Politique' },
+  { id: 'art-03', name: 'Sport',               url: 'https://www.europe1.fr/rss/sport',                 category: 'Sport' },
+  { id: 'art-04', name: 'Culture',             url: 'https://www.europe1.fr/rss/culture',               category: 'Culture' },
+  { id: 'art-05', name: 'Faits divers',        url: 'https://www.europe1.fr/rss/faits-divers',          category: 'Faits divers' },
+  { id: 'art-06', name: 'Médias',              url: 'https://www.europe1.fr/rss/medias',                category: 'Médias' },
+  { id: 'art-07', name: 'Économie',            url: 'https://www.europe1.fr/rss/economie',              category: 'Économie' },
+  { id: 'art-08', name: 'International',       url: 'https://www.europe1.fr/rss/international',         category: 'International' },
+  { id: 'art-09', name: 'Santé',               url: 'https://www.europe1.fr/rss/sante',                 category: 'Santé' },
+  { id: 'art-10', name: 'People',              url: 'https://www.europe1.fr/rss/people',                category: 'People' },
+  { id: 'art-11', name: 'Immobilier',          url: 'https://www.europe1.fr/rss/immobilier',            category: 'Immobilier' },
+  { id: 'art-12', name: 'Guide shopping',      url: 'https://www.europe1.fr/rss/Guide%20shopping',      category: 'Guide shopping' },
+  { id: 'art-13', name: 'Police-Justice',      url: 'https://www.europe1.fr/rss/police%20-%20justice',  category: 'Police-Justice' },
+  { id: 'art-14', name: 'Sciences',            url: 'https://www.europe1.fr/rss/sciences',              category: 'Sciences' },
+  { id: 'art-15', name: 'Environnement',       url: 'https://www.europe1.fr/rss/environnement',         category: 'Environnement' },
+  { id: 'art-16', name: 'Technologies',        url: 'https://www.europe1.fr/rss/technologies',          category: 'Technologies' },
+  { id: 'art-17', name: 'Animaux',             url: 'https://www.europe1.fr/rss/animaux',               category: 'Animaux' },
+  { id: 'art-18', name: 'Cuisine',             url: 'https://www.europe1.fr/rss/cuisine',               category: 'Cuisine' },
+  { id: 'art-19', name: 'Maison',              url: 'https://www.europe1.fr/rss/maison',                category: 'Maison' },
+  { id: 'art-20', name: 'Lifestyle',           url: 'https://www.europe1.fr/rss/lifestyle',             category: 'Lifestyle' },
+  { id: 'art-21', name: 'Insolite',            url: 'https://www.europe1.fr/rss/insolite',              category: 'Insolite' },
+  { id: 'art-22', name: 'Horoscope',           url: 'https://www.europe1.fr/rss/horoscope',             category: 'Horoscope' },
+  { id: 'art-23', name: 'Météo',               url: 'https://www.europe1.fr/rss/m%C3%A9t%C3%A9o',       category: 'Météo' },
+  { id: 'art-24', name: 'Voyage',              url: 'https://www.europe1.fr/rss/voyage',                category: 'Voyage' },
+  { id: 'art-25', name: 'Vie professionnelle', url: 'https://www.europe1.fr/rss/vie%20professionnelle', category: 'Vie pro' },
+];
+
 // ===== STORAGE =====
 function saveState() {
   localStorage.setItem('pf_version', DATA_VERSION);
@@ -104,19 +133,18 @@ window.refreshGinette = async function() {
 
 async function loadGinetteStats() {
   try {
-    const [podRes, artRes] = await Promise.all([
-      fetch('/api/stats'),
-      fetch('/api/stats/articles'),
-    ]);
+    // Fetch podcast stats (server) + article stats (client-side browser) in parallel
+    const podProm = fetch('/api/stats');
+    const artProm = loadArticlesClientSide();
 
-    if (podRes.status === 503 || artRes.status === 503) {
+    const podRes = await podProm;
+    if (podRes.status === 503) {
       document.getElementById('ginette-updated').textContent = 'Initialisation…';
       ginetteRetryTimer = setTimeout(loadGinetteStats, 5000);
       return;
     }
 
-    const pod = await podRes.json();
-    const art = await artRes.json();
+    const [pod, artData] = await Promise.all([podRes.json(), artProm]);
 
     // Labels de dates
     const now  = new Date();
@@ -125,9 +153,9 @@ async function loadGinetteStats() {
     document.getElementById('tug-date-today').textContent = fmtDate(now);
     document.getElementById('tug-date-yest').textContent  = fmtDate(yest);
 
-    // Mise à jour des deux tug bars
-    updateTug(pod.pods.today, art.arts.today, '');    // J
-    updateTug(pod.pods.d1,    art.arts.d1,    '-y');  // J-1
+    // Mise à jour des deux tug bars (articles depuis le navigateur = vrai compte)
+    updateTug(pod.pods.today, artData.todayCount, '');   // J
+    updateTug(pod.pods.d1,    artData.d1Count,    '-y'); // J-1
 
     const hm = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('ginette-updated').textContent = `Mis à jour ${hm}`;
@@ -223,6 +251,125 @@ window.refreshStats = async function() {
   if (btn) { btn.style.opacity = ''; btn.disabled = false; }
 };
 
+// ===== CLIENT-SIDE ARTICLE FETCHING =====
+// Articles from europe1.fr are blocked by Cloudflare when fetched from Railway (datacenter IP).
+// We fetch them directly from the browser via CORS proxies — same approach as podcasts_v2_3.html.
+
+let _artCache = { data: null, expiresAt: 0 };
+let _artFetchPromise = null; // coalesces concurrent callers
+
+/** Midnight Paris time, N days ago. */
+function parisMidnightClient(now, daysAgo) {
+  const d = new Date(now);
+  d.setDate(d.getDate() - daysAgo);
+  const str = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const [day, month, year] = str.split('/');
+  const tzStr = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', timeZoneName: 'short' });
+  const offset = tzStr.includes('+2') ? '+02:00' : '+01:00';
+  return new Date(`${year}-${month}-${day}T00:00:00${offset}`);
+}
+
+/** Fetch RSS XML via CORS proxies (corsproxy.io → allorigins raw → allorigins JSON). */
+async function fetchArticleXML(url) {
+  const t = Math.floor(Date.now() / 60000);
+  const sep = url.includes('?') ? '&' : '?';
+  const busted = `${url}${sep}_t=${t}`;
+  const enc = encodeURIComponent(busted);
+
+  const proxies = [
+    () => fetch(`https://corsproxy.io/?url=${enc}`, { headers: { 'cache-control': 'no-store' } })
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }),
+    () => fetch(`https://api.allorigins.win/raw?url=${enc}`)
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }),
+    () => fetch(`https://api.allorigins.win/get?url=${enc}`)
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(j => { if (!j?.contents) throw new Error('no contents'); return j.contents; }),
+  ];
+
+  for (const attempt of proxies) {
+    try {
+      const xml = await attempt();
+      if (xml && xml.includes('<item>')) return xml;
+    } catch { /* try next proxy */ }
+  }
+  return null;
+}
+
+/** Parse <item> elements from RSS XML using DOMParser. */
+function parseArticleItems(xml) {
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    return Array.from(doc.querySelectorAll('item')).map(item => {
+      const rawDate = item.querySelector('pubDate')?.textContent?.trim();
+      return {
+        title: item.querySelector('title')?.textContent?.trim() || 'Sans titre',
+        link:  item.querySelector('link')?.textContent?.trim()  || '',
+        date:  rawDate ? new Date(rawDate) : null,
+      };
+    }).filter(i => i.date && !isNaN(i.date.getTime()));
+  } catch { return []; }
+}
+
+/** Load all 25 article feeds client-side. Returns { todayCount, d1Count, d2Count, feeds }. */
+async function loadArticlesClientSide() {
+  if (_artCache.data && Date.now() < _artCache.expiresAt) return _artCache.data;
+  if (_artFetchPromise) return _artFetchPromise;
+
+  _artFetchPromise = (async () => {
+    const now = new Date();
+    const t0  = parisMidnightClient(now, 0); // today 00:00 Paris
+    const t1  = parisMidnightClient(now, 1); // yesterday 00:00 Paris
+    const t2  = parisMidnightClient(now, 2); // day-before 00:00 Paris
+
+    const BATCH = 8;
+    const feedResults = [];
+
+    for (let i = 0; i < ARTICLE_FEEDS_CLIENT.length; i += BATCH) {
+      const batch = ARTICLE_FEEDS_CLIENT.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(
+        batch.map(async (feed) => {
+          const xml = await fetchArticleXML(feed.url);
+          return { feed, items: xml ? parseArticleItems(xml) : [] };
+        })
+      );
+      settled.forEach(r => { if (r.status === 'fulfilled') feedResults.push(r.value); });
+    }
+
+    let todayCount = 0, d1Count = 0, d2Count = 0;
+    const feeds = feedResults.map(({ feed, items }) => {
+      const todayItems = items.filter(i => i.date >= t0 && i.date < now);
+      const d1Items    = items.filter(i => i.date >= t1 && i.date < t0);
+      const d2Items    = items.filter(i => i.date >= t2 && i.date < t1);
+      todayCount += todayItems.length;
+      d1Count    += d1Items.length;
+      d2Count    += d2Items.length;
+      const last = todayItems[0] || null; // items already newest-first in RSS
+      return {
+        id:        feed.id,
+        name:      feed.name,
+        category:  feed.category,
+        today:     todayItems.length,
+        lastDate:  last ? last.date.toISOString() : null,
+        lastTitle: last ? last.title : null,
+        feedUrl:   feed.url,
+      };
+    });
+
+    feeds.sort((a, b) => {
+      if (a.lastDate && b.lastDate) return new Date(b.lastDate) - new Date(a.lastDate);
+      if (a.lastDate) return -1;
+      if (b.lastDate) return 1;
+      return a.name.localeCompare(b.name, 'fr');
+    });
+
+    const data = { todayCount, d1Count, d2Count, feeds };
+    _artCache = { data, expiresAt: Date.now() + 5 * 60 * 1000 };
+    return data;
+  })().finally(() => { _artFetchPromise = null; });
+
+  return _artFetchPromise;
+}
+
 // ===== ARTICLES VIEW =====
 let artRetryTimer = null;
 
@@ -237,33 +384,23 @@ window.refreshArticles = async function() {
 
 async function loadArticleStats() {
   try {
-    const res = await fetch('/api/stats/articles');
-    if (res.status === 503) {
-      document.getElementById('art-header-updated').textContent = 'Initialisation…';
-      artRetryTimer = setTimeout(loadArticleStats, 5000);
-      return;
-    }
-    if (!res.ok) throw new Error(`Erreur ${res.status}`);
-    const data = await res.json();
-    const arts = data.arts || {};
-    document.getElementById('stat-art-today').textContent = arts.today ?? '—';
-    document.getElementById('stat-art-d1').textContent    = arts.d1    ?? '—';
-    document.getElementById('stat-art-d2').textContent    = arts.d2    ?? '—';
-    if (data.updatedAt) {
-      const t = new Date(data.updatedAt);
-      document.getElementById('art-header-updated').textContent =
-        `Mis à jour ${t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}`;
-    }
+    // Articles are fetched client-side (browser → CORS proxy → europe1.fr)
+    // This bypasses Railway datacenter IP blocking by Cloudflare
+    const data = await loadArticlesClientSide();
+    document.getElementById('stat-art-today').textContent = data.todayCount;
+    document.getElementById('stat-art-d1').textContent    = data.d1Count;
+    document.getElementById('stat-art-d2').textContent    = data.d2Count;
+    const hm = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('art-header-updated').textContent = `Mis à jour ${hm}`;
   } catch (e) {
     console.error('loadArticleStats error:', e.message);
+    document.getElementById('art-header-updated').textContent = 'Erreur de chargement';
   }
 }
 
 async function loadArticleMonitoring() {
   try {
-    const res = await fetch('/api/monitoring/articles');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await loadArticlesClientSide();
     renderArticleMonitoring(data.feeds);
   } catch (e) {
     console.error('loadArticleMonitoring error:', e.message);
