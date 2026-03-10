@@ -165,9 +165,13 @@ function renderFilteredEpisodes() {
 
 // ===== EPISODES =====
 async function loadEpisodes() {
-  if (state.feeds.length === 0) { renderEpisodes([]); return; }
-
   const container = document.getElementById('episodes-scroll');
+
+  if (state.feeds.length === 0) {
+    // Flux pas encore chargés — garder le spinner le temps que loadDefaultFeeds() s'exécute
+    container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des flux...</p></div>`;
+    return;
+  }
   container.innerHTML = `<div class="episodes-loading"><div class="spinner"></div><p>Chargement des contenus...</p></div>`;
 
   try {
@@ -269,6 +273,7 @@ async function loadDefaultFeeds() {
 
     updateStats();
     showToast(`${state.feeds.length} flux Europe 1 chargés`, 'success');
+    loadEpisodes(); // déclenche le chargement des épisodes maintenant que les flux sont prêts
   } catch (e) {
     console.warn('Could not load default feeds:', e.message);
   }
@@ -444,6 +449,7 @@ window.clearAllData = function() {
   state.defaultFeedsLoaded = false;
   localStorage.clear();
   refreshHome();
+  loadDefaultFeeds(); // recharge les flux Europe 1 automatiquement
   showToast('Données réinitialisées', 'info');
 };
 
@@ -516,8 +522,12 @@ if ('serviceWorker' in navigator) {
 loadState();
 connectSSE();
 
-loadDefaultFeeds().then(() => refreshHome());
-if (state.feeds.length > 0) refreshHome();
+// Affiche la vue Home et charge les épisodes selon l'état courant
+navigateTo('home');
+
+// Premier lancement : charge les 124 flux Europe 1, puis déclenche loadEpisodes()
+// Retours suivants : state.feeds.length > 0 → skip immédiat
+loadDefaultFeeds();
 
 if (state.telegramConfig.token) {
   fetch('/api/telegram/config', {
