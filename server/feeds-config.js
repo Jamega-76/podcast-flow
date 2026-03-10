@@ -107,38 +107,10 @@ const PODCASTS_E1 = [
   { id: 'e1-99', name: 'Dans la bibliothèque',                            url: 'https://feeds.audiomeans.fr/feed/c35816b2-174c-4f9e-9889-6fb86fdd8fe5.xml', category: 'Culture',     statut: 'hors-comptage' },
 ];
 
-const ARTICLES_E1 = [
-  { id: 'art-1',  name: 'Europe 1 · Société',            url: 'https://www.europe1.fr/rss/societe',             category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-2',  name: 'Europe 1 · Politique',           url: 'https://www.europe1.fr/rss/politique',           category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-3',  name: 'Europe 1 · Sport',               url: 'https://www.europe1.fr/rss/sport',               category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-4',  name: 'Europe 1 · Culture',             url: 'https://www.europe1.fr/rss/culture',             category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-5',  name: 'Europe 1 · Faits divers',        url: 'https://www.europe1.fr/rss/faits-divers',        category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-6',  name: 'Europe 1 · Médias',              url: 'https://www.europe1.fr/rss/medias',              category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-7',  name: 'Europe 1 · Économie',            url: 'https://www.europe1.fr/rss/economie',            category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-8',  name: 'Europe 1 · International',       url: 'https://www.europe1.fr/rss/international',       category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-9',  name: 'Europe 1 · Santé',               url: 'https://www.europe1.fr/rss/sante',               category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-10', name: 'Europe 1 · People',              url: 'https://www.europe1.fr/rss/people',              category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-11', name: 'Europe 1 · Immobilier',          url: 'https://www.europe1.fr/rss/immobilier',          category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-12', name: 'Europe 1 · Guide shopping',      url: 'https://www.europe1.fr/rss/Guide%20shopping',    category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-13', name: 'Europe 1 · Police-Justice',      url: 'https://www.europe1.fr/rss/police%20-%20justice', category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-14', name: 'Europe 1 · Sciences',            url: 'https://www.europe1.fr/rss/sciences',            category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-15', name: 'Europe 1 · Environnement',       url: 'https://www.europe1.fr/rss/environnement',       category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-16', name: 'Europe 1 · Technologies',        url: 'https://www.europe1.fr/rss/technologies',        category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-17', name: 'Europe 1 · Animaux',             url: 'https://www.europe1.fr/rss/animaux',             category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-18', name: 'Europe 1 · Cuisine',             url: 'https://www.europe1.fr/rss/cuisine',             category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-19', name: 'Europe 1 · Maison',              url: 'https://www.europe1.fr/rss/maison',              category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-20', name: 'Europe 1 · Lifestyle',           url: 'https://www.europe1.fr/rss/lifestyle',           category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-21', name: 'Europe 1 · Insolite',            url: 'https://www.europe1.fr/rss/insolite',            category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-22', name: 'Europe 1 · Horoscope',           url: 'https://www.europe1.fr/rss/horoscope',           category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-23', name: 'Europe 1 · Météo',               url: 'https://www.europe1.fr/rss/météo',               category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-24', name: 'Europe 1 · Voyage',              url: 'https://www.europe1.fr/rss/voyage',              category: 'Articles', statut: 'comptabilisé' },
-  { id: 'art-25', name: 'Europe 1 · Vie professionnelle', url: 'https://www.europe1.fr/rss/vie%20professionnelle', category: 'Articles', statut: 'comptabilisé' },
-];
+// All feeds (podcasts only — source: flux_podcasts_europe1.xlsx)
+const ALL_FEEDS = PODCASTS_E1;
 
-// All feeds combined
-const ALL_FEEDS = [...PODCASTS_E1, ...ARTICLES_E1];
-
-// Feeds to monitor by default (only "comptabilisé")
+// Feeds to monitor by default (only "comptabilisé" = 86 feeds)
 const DEFAULT_FEEDS = ALL_FEEDS.filter(f => f.statut === 'comptabilisé');
 
-module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS };
+module.exports = { PODCASTS_E1, ALL_FEEDS, DEFAULT_FEEDS };

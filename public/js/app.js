@@ -31,7 +31,6 @@ const state = {
     { name: 'Médias',          icon: '📡', count: 0 },
     { name: 'Sport',           icon: '⚽', count: 0 },
     { name: 'Économie',        icon: '📈', count: 0 },
-    { name: 'Articles',        icon: '📄', count: 0 },
   ],
   popularPodcasts: [],
   defaultFeedsLoaded: false,
@@ -429,7 +428,7 @@ async function renderPopular() {
       'Émissions': '🎙️', 'Info': '📰', 'Éditos': '✍️', 'Interviews': '🎤',
       'Culture': '🎭', 'Histoire': '📜', 'Faits divers': '🔍',
       'Divertissement': '😄', 'Musique': '🎵', 'Médias': '📡',
-      'Sport': '⚽', 'Économie': '📈', 'Articles': '📄',
+      'Sport': '⚽', 'Économie': '📈',
     };
 
     grid.innerHTML = data.feeds.map((p, i) => {
