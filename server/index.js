@@ -152,7 +152,7 @@ app.get('/api/monitoring', (req, res) => {
       today: eps.length,
       lastDate: last ? last.date : null,
       lastTitle: last ? last.title : null,
-      lastLink: last ? last.link : null,
+      feedUrl: f.url,
       image: imageByFeed[f.id] || null,
     };
   });

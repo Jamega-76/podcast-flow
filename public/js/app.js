@@ -176,8 +176,8 @@ function renderMonitoring(feeds) {
     const thumb = imgSrc
       ? `<img class="monitor-thumb" src="${escapeHtml(imgSrc)}" alt="" loading="lazy" width="36" height="36" onerror="this.style.display='none'">`
       : `<div class="monitor-thumb monitor-thumb-fallback">${escapeHtml((f.name || '?').charAt(0))}</div>`;
-    const nameEl = f.lastLink
-      ? `<a class="monitor-name monitor-link" href="${escapeHtml(f.lastLink)}" target="_blank" rel="noopener">${escapeHtml(f.name)}</a>`
+    const nameEl = f.feedUrl
+      ? `<a class="monitor-name monitor-link" href="${escapeHtml(f.feedUrl)}" target="_blank" rel="noopener">${escapeHtml(f.name)}</a>`
       : `<span class="monitor-name">${escapeHtml(f.name)}</span>`;
     return `
       <div class="monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}">
