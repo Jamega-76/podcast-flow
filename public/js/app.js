@@ -120,28 +120,11 @@ async function loadStats() {
 
 function updateStats(data) {
   const pods = data.pods || {};
-  const arts = data.arts || {};
 
-  // Comptages J / J-1 / J-2
   document.getElementById('stat-pod-today').textContent = pods.today ?? '—';
   document.getElementById('stat-pod-d1').textContent    = pods.d1    ?? '—';
   document.getElementById('stat-pod-d2').textContent    = pods.d2    ?? '—';
 
-  document.getElementById('stat-art-today').textContent = arts.today ?? '—';
-  document.getElementById('stat-art-d1').textContent    = arts.d1    ?? '—';
-  document.getElementById('stat-art-d2').textContent    = arts.d2    ?? '—';
-
-  // Ratio bar (basé sur la journée en cours)
-  const total = (pods.today ?? 0) + (arts.today ?? 0);
-  const podPct = total > 0 ? Math.round(((pods.today ?? 0) / total) * 100) : 50;
-  const artPct = 100 - podPct;
-
-  document.getElementById('ratio-bar-pod').style.width = podPct + '%';
-  document.getElementById('ratio-bar-art').style.width = artPct + '%';
-  document.getElementById('ratio-label-pod').textContent = `🎙️ ${podPct}%`;
-  document.getElementById('ratio-label-art').textContent = `📰 ${artPct}%`;
-
-  // Horodatage dans le header
   if (data.updatedAt) {
     const t = new Date(data.updatedAt);
     setHeaderUpdated(`Mis à jour ${t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}`);

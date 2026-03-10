@@ -24,9 +24,9 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
   console.log('✅ Telegram configured from .env');
 }
 
-// Monitored feeds: 86 podcasts comptabilisés + 25 articles = 111 flux
+// Monitored feeds: 86 podcasts comptabilisés
 scheduler.setFeeds(MONITORED_FEEDS);
-console.log(`📡 Surveillance: ${DEFAULT_FEEDS.length} podcasts comptabilisés + ${ARTICLES_E1.length} articles = ${MONITORED_FEEDS.length} flux`);
+console.log(`📡 Surveillance: ${DEFAULT_FEEDS.length} podcasts comptabilisés`);
 
 // ===== EPISODES CACHE =====
 // Cache partagé en mémoire — rafraîchi toutes les 5 minutes
@@ -35,12 +35,10 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function refreshEpisodesCache() {
   try {
-    console.log('🔄 Rafraîchissement du cache (111 flux surveillés)...');
+    console.log('🔄 Rafraîchissement du cache (86 podcasts)...');
     const episodes = await fetchAllFeedsInBatches(MONITORED_FEEDS, 15);
     episodesCache = { episodes, updatedAt: Date.now() };
-    const pods = episodes.filter(e => e.type === 'podcast').length;
-    const arts = episodes.filter(e => e.type === 'article').length;
-    console.log(`✅ Cache prêt: ${pods} épisodes + ${arts} articles (total: ${episodes.length})`);
+    console.log(`✅ Cache prêt: ${episodes.length} épisodes`);
   } catch (err) {
     console.error('❌ Cache refresh error:', err.message);
   }
@@ -102,17 +100,14 @@ app.get('/api/stats', (req, res) => {
   const t1 = parisMidnight(now, 1); // hier 00:00
   const t2 = parisMidnight(now, 2); // avant-hier 00:00
 
-  const pods = episodesCache.episodes.filter(e => e.type !== 'article');
-  const arts = episodesCache.episodes.filter(e => e.type === 'article');
-
   const cnt = (arr, from, to) => arr.filter(e => {
     const d = new Date(e.date);
     return !isNaN(d) && d >= from && d < to;
   }).length;
 
+  const eps = episodesCache.episodes;
   res.json({
-    pods: { today: cnt(pods, t0, now), d1: cnt(pods, t1, t0), d2: cnt(pods, t2, t1) },
-    arts: { today: cnt(arts, t0, now), d1: cnt(arts, t1, t0), d2: cnt(arts, t2, t1) },
+    pods: { today: cnt(eps, t0, now), d1: cnt(eps, t1, t0), d2: cnt(eps, t2, t1) },
     updatedAt: episodesCache.updatedAt ? new Date(episodesCache.updatedAt).toISOString() : null,
   });
 });
