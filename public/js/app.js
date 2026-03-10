@@ -172,9 +172,10 @@ function renderMonitoring(feeds) {
     const timeStr = f.lastDate
       ? new Date(f.lastDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
       : null;
-    const thumb = f.image
-      ? `<img class="monitor-thumb" src="${escapeHtml(f.image)}" alt="" loading="lazy" width="36" height="36" onerror="this.style.display='none'">`
-      : `<div class="monitor-thumb monitor-thumb-fallback">${escapeHtml(f.name.charAt(0))}</div>`;
+    const imgSrc = typeof f.image === 'string' && f.image ? f.image : null;
+    const thumb = imgSrc
+      ? `<img class="monitor-thumb" src="${escapeHtml(imgSrc)}" alt="" loading="lazy" width="36" height="36" onerror="this.style.display='none'">`
+      : `<div class="monitor-thumb monitor-thumb-fallback">${escapeHtml((f.name || '?').charAt(0))}</div>`;
     return `
       <div class="monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}">
         ${thumb}

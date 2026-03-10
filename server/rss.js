@@ -74,7 +74,7 @@ async function fetchFeed(url) {
       isoDate: item.isoDate || null,
       description: item.contentSnippet || item.content || '',
       itunes: {
-        image: item.itunesImage?.$ ?.href || item.itunesImage || null,
+        image: item.itunesImage?.$ ?.href || (typeof item.itunesImage === 'string' ? item.itunesImage : null),
         duration: item.duration || null,
         summary: item.summary || null,
       },

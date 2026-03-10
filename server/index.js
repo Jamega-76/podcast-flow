@@ -134,10 +134,12 @@ app.get('/api/monitoring', (req, res) => {
     }
   });
 
-  // Index image par feedId (une seule fois par feed, depuis n'importe quel épisode)
+  // Index image par feedId — on s'assure que c'est bien une string non-vide
   const imageByFeed = {};
   episodesCache.episodes.forEach(e => {
-    if (!imageByFeed[e.feedId] && e.image) imageByFeed[e.feedId] = e.image;
+    if (!imageByFeed[e.feedId] && typeof e.image === 'string' && e.image) {
+      imageByFeed[e.feedId] = e.image;
+    }
   });
 
   const feeds = MONITORED_FEEDS.map(f => {
