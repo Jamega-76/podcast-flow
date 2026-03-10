@@ -142,14 +142,36 @@ const ALL_FEEDS = [...PODCASTS_E1, ...ARTICLES_E1];
 // Podcasts comptabilisés uniquement (86 flux)
 const DEFAULT_FEEDS = PODCASTS_E1.filter(f => f.statut === 'comptabilisé');
 
-// Flux articles surveillés (europe1.fr — curl bypass Cloudflare)
+// Flux articles surveillés (europe1.fr — via CORS proxies pour bypass Cloudflare)
 const ARTICLE_FEEDS_V2 = [
-  { id: 'art-01', name: 'Société',       url: 'https://www.europe1.fr/rss/societe',       category: 'Société',       type: 'article' },
-  { id: 'art-02', name: 'Politique',     url: 'https://www.europe1.fr/rss/politique',     category: 'Politique',     type: 'article' },
-  { id: 'art-03', name: 'International', url: 'https://www.europe1.fr/rss/international', category: 'International', type: 'article' },
+  { id: 'art-01', name: 'Société',             url: 'https://www.europe1.fr/rss/societe',               category: 'Société',           type: 'article' },
+  { id: 'art-02', name: 'Politique',           url: 'https://www.europe1.fr/rss/politique',             category: 'Politique',         type: 'article' },
+  { id: 'art-03', name: 'Sport',               url: 'https://www.europe1.fr/rss/sport',                 category: 'Sport',             type: 'article' },
+  { id: 'art-04', name: 'Culture',             url: 'https://www.europe1.fr/rss/culture',               category: 'Culture',           type: 'article' },
+  { id: 'art-05', name: 'Faits divers',        url: 'https://www.europe1.fr/rss/faits-divers',          category: 'Faits divers',      type: 'article' },
+  { id: 'art-06', name: 'Médias',              url: 'https://www.europe1.fr/rss/medias',                category: 'Médias',            type: 'article' },
+  { id: 'art-07', name: 'Économie',            url: 'https://www.europe1.fr/rss/economie',              category: 'Économie',          type: 'article' },
+  { id: 'art-08', name: 'International',       url: 'https://www.europe1.fr/rss/international',         category: 'International',     type: 'article' },
+  { id: 'art-09', name: 'Santé',               url: 'https://www.europe1.fr/rss/sante',                 category: 'Santé',             type: 'article' },
+  { id: 'art-10', name: 'People',              url: 'https://www.europe1.fr/rss/people',                category: 'People',            type: 'article' },
+  { id: 'art-11', name: 'Immobilier',          url: 'https://www.europe1.fr/rss/immobilier',            category: 'Immobilier',        type: 'article' },
+  { id: 'art-12', name: 'Guide shopping',      url: 'https://www.europe1.fr/rss/Guide%20shopping',      category: 'Shopping',          type: 'article' },
+  { id: 'art-13', name: 'Police-Justice',      url: 'https://www.europe1.fr/rss/police%20-%20justice',  category: 'Police-Justice',    type: 'article' },
+  { id: 'art-14', name: 'Sciences',            url: 'https://www.europe1.fr/rss/sciences',              category: 'Sciences',          type: 'article' },
+  { id: 'art-15', name: 'Environnement',       url: 'https://www.europe1.fr/rss/environnement',         category: 'Environnement',     type: 'article' },
+  { id: 'art-16', name: 'Technologies',        url: 'https://www.europe1.fr/rss/technologies',          category: 'Technologies',      type: 'article' },
+  { id: 'art-17', name: 'Animaux',             url: 'https://www.europe1.fr/rss/animaux',               category: 'Animaux',           type: 'article' },
+  { id: 'art-18', name: 'Cuisine',             url: 'https://www.europe1.fr/rss/cuisine',               category: 'Cuisine',           type: 'article' },
+  { id: 'art-19', name: 'Maison',              url: 'https://www.europe1.fr/rss/maison',                category: 'Maison',            type: 'article' },
+  { id: 'art-20', name: 'Lifestyle',           url: 'https://www.europe1.fr/rss/lifestyle',             category: 'Lifestyle',         type: 'article' },
+  { id: 'art-21', name: 'Insolite',            url: 'https://www.europe1.fr/rss/insolite',              category: 'Insolite',          type: 'article' },
+  { id: 'art-22', name: 'Horoscope',           url: 'https://www.europe1.fr/rss/horoscope',             category: 'Horoscope',         type: 'article' },
+  { id: 'art-23', name: 'Météo',               url: 'https://www.europe1.fr/rss/m%C3%A9t%C3%A9o',       category: 'Météo',             type: 'article' },
+  { id: 'art-24', name: 'Voyage',              url: 'https://www.europe1.fr/rss/voyage',                category: 'Voyage',            type: 'article' },
+  { id: 'art-25', name: 'Vie professionnelle', url: 'https://www.europe1.fr/rss/vie%20professionnelle', category: 'Vie pro',           type: 'article' },
 ];
 
-// Feeds surveillés : 86 podcasts + 3 articles = 89 flux
+// Feeds surveillés : 86 podcasts + 25 articles = 111 flux
 const MONITORED_FEEDS = [...DEFAULT_FEEDS, ...ARTICLE_FEEDS_V2];
 
 module.exports = { PODCASTS_E1, ARTICLES_E1, ALL_FEEDS, DEFAULT_FEEDS, ARTICLE_FEEDS_V2, MONITORED_FEEDS };
