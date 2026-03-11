@@ -252,67 +252,137 @@ window.refreshStats = async function() {
 };
 
 // ===== CLIENT-SIDE ARTICLE FETCHING =====
-// Articles from europe1.fr are blocked by Cloudflare when fetched from Railway (datacenter IP).
-// We fetch them directly from the browser via CORS proxies — same approach as podcasts_v2_3.html.
+// Méthode identique à podcasts_v2_3.html :
+//   - isValidXML() pour rejeter les pages d'erreur HTML de Cloudflare
+//   - parseRSSDate() pour gérer CET/CEST (timezones nommées ignorées par new Date())
+//   - Support RSS 2.0 (<item>) + Atom (<entry>) + fallback text/html si XML mal formé
+//   - Stratégie paires [[0,1],[2,3],[4]] : 2 proxies en simultané, plus rapide et robuste
+//   - AbortSignal.timeout(8000) : aucun proxy ne bloque indéfiniment
+//   - _feedCache : cache session par URL (évite de re-fetcher lors du recomptage)
 
-let _artCache = { data: null, expiresAt: 0 };
-let _artFetchPromise = null; // coalesces concurrent callers
+let _artCache     = { data: null, expiresAt: 0 };
+const _feedCache  = {}; // cache session : url → xml|null (vidé à chaque nouveau comptage)
 
-/** Midnight Paris time, N days ago. */
-function parisMidnightClient(now, daysAgo) {
-  const d = new Date(now);
-  d.setDate(d.getDate() - daysAgo);
-  const str = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
-  const [day, month, year] = str.split('/');
-  const tzStr = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', timeZoneName: 'short' });
-  const offset = tzStr.includes('+2') ? '+02:00' : '+01:00';
-  return new Date(`${year}-${month}-${day}T00:00:00${offset}`);
+/** Vérifie que le texte est du XML RSS/Atom et non une page HTML d'erreur. */
+function isValidXML(text) {
+  if (!text || text.length < 50) return false;
+  const lower = text.trimStart().toLowerCase();
+  if (lower.startsWith('<!doctype html') || lower.startsWith('<html')) return false;
+  return text.includes('<rss') || text.includes('<feed') || text.includes('<channel>') || text.includes('<?xml');
 }
 
-/** Fetch RSS XML via CORS proxies (corsproxy.io → allorigins raw → allorigins JSON). */
-async function fetchArticleXML(url) {
-  const t = Math.floor(Date.now() / 60000);
-  const sep = url.includes('?') ? '&' : '?';
-  const busted = `${url}${sep}_t=${t}`;
-  const enc = encodeURIComponent(busted);
-
-  const proxies = [
-    () => fetch(`https://corsproxy.io/?url=${enc}`, { headers: { 'cache-control': 'no-store' } })
-            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }),
-    () => fetch(`https://api.allorigins.win/raw?url=${enc}`)
-            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }),
-    () => fetch(`https://api.allorigins.win/get?url=${enc}`)
-            .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-            .then(j => { if (!j?.contents) throw new Error('no contents'); return j.contents; }),
-  ];
-
-  for (const attempt of proxies) {
-    try {
-      const xml = await attempt();
-      if (xml && xml.includes('<item>')) return xml;
-    } catch { /* try next proxy */ }
-  }
+/** Parse une date RSS en gérant les timezones nommées (CET, CEST…) ignorées par new Date(). */
+function parseRSSDate(str) {
+  if (!str) return null;
+  let d = new Date(str);
+  if (!isNaN(d)) return d;
+  // Remplace les noms de timezone par leur offset numérique
+  const tzMap = { CET: '+0100', CEST: '+0200', GMT: '+0000', UTC: '+0000', EST: '-0500', PST: '-0800' };
+  const fixed = str.replace(/(CEST|CET|GMT|UTC|EST|PST)/, m => tzMap[m] || '+0000');
+  d = new Date(fixed);
+  if (!isNaN(d)) return d;
   return null;
 }
 
-/** Parse <item> elements from RSS XML using DOMParser. Trie du plus récent au plus ancien. */
+/** Extrait les items d'un document RSS/Atom parsé (supporte RSS 2.0 et Atom). */
+function extractItemsFromDoc(doc) {
+  const items = [];
+  // RSS 2.0 : <item> + <pubDate>
+  doc.querySelectorAll('item').forEach(item => {
+    const rawDate = item.querySelector('pubDate')?.textContent?.trim()
+                 || item.querySelector('date')?.textContent?.trim();
+    const d = parseRSSDate(rawDate);
+    if (!d) return;
+    items.push({
+      title: item.querySelector('title')?.textContent?.trim() || 'Sans titre',
+      link:  item.querySelector('link')?.textContent?.trim()  || '',
+      date:  d,
+      ts:    d.getTime(),
+    });
+  });
+  // Atom : <entry> + <updated> ou <published>
+  doc.querySelectorAll('entry').forEach(entry => {
+    const rawDate = (entry.querySelector('updated') || entry.querySelector('published'))?.textContent?.trim();
+    const d = parseRSSDate(rawDate);
+    if (!d) return;
+    items.push({
+      title: entry.querySelector('title')?.textContent?.trim() || 'Sans titre',
+      link:  entry.querySelector('link')?.getAttribute('href') || entry.querySelector('link')?.textContent?.trim() || '',
+      date:  d,
+      ts:    d.getTime(),
+    });
+  });
+  return items.sort((a, b) => b.ts - a.ts); // plus récent en premier
+}
+
+/** Parse le XML RSS/Atom avec fallback text/html si XML mal formé. */
 function parseArticleItems(xml) {
   try {
-    const doc = new DOMParser().parseFromString(xml, 'text/xml');
-    return Array.from(doc.querySelectorAll('item')).map(item => {
-      // Certains flux utilisent dc:date en plus de pubDate
-      const rawDate = item.querySelector('pubDate')?.textContent?.trim()
-                   || item.querySelector('date')?.textContent?.trim();
-      const ts = rawDate ? new Date(rawDate).getTime() : NaN;
-      return {
-        title: item.querySelector('title')?.textContent?.trim() || 'Sans titre',
-        link:  item.querySelector('link')?.textContent?.trim()  || '',
-        date:  new Date(ts),
-        ts,                    // timestamp numérique — comparaison stricte
-      };
-    }).filter(i => !isNaN(i.ts))
-      .sort((a, b) => b.ts - a.ts); // plus récent en premier (RSS non garanti trié)
+    const parser = new DOMParser();
+    let doc = parser.parseFromString(xml, 'text/xml');
+    if (doc.querySelector('parsererror')) {
+      // XML mal formé → tentative en mode HTML (certains flux ont des caractères non échappés)
+      doc = parser.parseFromString(xml, 'text/html');
+    }
+    return extractItemsFromDoc(doc);
   } catch { return []; }
+}
+
+/**
+ * Fetch RSS XML via CORS proxies.
+ * Stratégie paires (identique à podcasts_v2_3.html) :
+ *   Round 1 : corsproxy.io  + allorigins raw   (simultané)
+ *   Round 2 : allorigins JSON + cors.sh        (simultané)
+ *   Round 3 : fetch direct
+ */
+async function fetchArticleXML(url) {
+  if (_feedCache[url] !== undefined) return _feedCache[url];
+
+  const t   = Math.floor(Date.now() / 60000);
+  const sep = url.includes('?') ? '&' : '?';
+  const enc = encodeURIComponent(`${url}${sep}_t=${t}`);
+
+  const proxies = [
+    async () => { // 0 — corsproxy.io
+      const r = await fetch(`https://corsproxy.io/?url=${enc}`, { signal: AbortSignal.timeout(8000), cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      const t = await r.text(); if (!isValidXML(t)) throw new Error('invalid'); return t;
+    },
+    async () => { // 1 — allorigins raw
+      const r = await fetch(`https://api.allorigins.win/raw?url=${enc}`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(r.status);
+      const t = await r.text(); if (!isValidXML(t)) throw new Error('invalid'); return t;
+    },
+    async () => { // 2 — allorigins JSON wrapper
+      const r = await fetch(`https://api.allorigins.win/get?url=${enc}`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json(); if (!j?.contents || !isValidXML(j.contents)) throw new Error('invalid'); return j.contents;
+    },
+    async () => { // 3 — cors.sh
+      const r = await fetch(`https://proxy.cors.sh/${url}`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'x-cors-api-key': 'temp_' + Math.random().toString(36).slice(2) },
+      });
+      if (!r.ok) throw new Error(r.status);
+      const t = await r.text(); if (!isValidXML(t)) throw new Error('invalid'); return t;
+    },
+    async () => { // 4 — accès direct
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(r.status);
+      const t = await r.text(); if (!isValidXML(t)) throw new Error('invalid'); return t;
+    },
+  ];
+
+  const pairs = [[0, 1], [2, 3], [4]]; // 2 proxies en simultané par round
+  let text = null;
+  for (const pair of pairs) {
+    if (text) break;
+    const settled = await Promise.allSettled(pair.map(i => proxies[i]()));
+    for (const r of settled) { if (r.status === 'fulfilled' && r.value) { text = r.value; break; } }
+  }
+
+  _feedCache[url] = text; // met en cache (même si null = échec)
+  return text;
 }
 
 /** Load all 25 article feeds client-side. Returns { todayCount, d1Count, d2Count, feeds }. */
@@ -445,15 +515,17 @@ window.countArticles = async function() {
   if (btnHeader) { btnHeader.style.opacity = '0.4'; btnHeader.disabled = true; }
   document.getElementById('art-header-updated').textContent = 'Comptage en cours…';
 
-  // Invalide le cache pour forcer un vrai comptage
+  // Vide le cache session pour forcer un re-fetch complet (même méthode que podcasts_v2_3.html)
+  Object.keys(_feedCache).forEach(k => delete _feedCache[k]);
   _artCache = { data: null, expiresAt: 0 };
 
-  const now = new Date();
-  const t0  = new Date(); t0.setHours(0, 0, 0, 0);
-  const t1  = new Date(t0); t1.setDate(t1.getDate() - 1);
-  const t2  = new Date(t1); t2.setDate(t2.getDate() - 1);
+  const now  = new Date();
+  const t0   = new Date(now.getFullYear(), now.getMonth(), now.getDate());          // minuit ce matin
+  const t1   = new Date(t0); t1.setDate(t1.getDate() - 1);                         // minuit hier
+  const t2   = new Date(t1); t2.setDate(t2.getDate() - 1);                         // minuit avant-hier
+  const t0ms = t0.getTime(), t1ms = t1.getTime(), t2ms = t2.getTime(), nowMs = now.getTime();
 
-  // Snapshot d'hier pour les données J-1 par rubrique (figées)
+  // Snapshot d'hier pour les données J-1 par rubrique (figées depuis le comptage précédent)
   const snapYest = getArticleSnapshot(1);
   const snapMap  = {};
   if (snapYest?.feeds) snapYest.feeds.forEach(f => { snapMap[f.id] = f; });
@@ -469,70 +541,67 @@ window.countArticles = async function() {
         <div class="monitor-dot dot-gray"></div>
         <div class="monitor-info"><span class="monitor-name">${escapeHtml(f.name)}</span></div>
         <div class="art-count-j badge-none">…</div>
-        <div class="art-count-d1 badge-d1-none">${snapMap[f.id] !== undefined ? snapMap[f.id].today || '—' : '…'}</div>
+        <div class="art-count-d1 badge-d1-none">${snapMap[f.id] !== undefined ? (snapMap[f.id].today || '—') : '…'}</div>
       </div>`).join('');
   }
 
-  // Pré-affiche le total J-1 depuis le snapshot (si disponible) pendant le comptage
   document.getElementById('stat-art-today').textContent = '0';
   document.getElementById('stat-art-d1').textContent    = snapYest ? snapYest.count : '—';
   document.getElementById('stat-art-d2').textContent    = '—';
 
-  for (const feed of ARTICLE_FEEDS_CLIENT) {
-    let today = 0, d1 = 0, d2 = 0, last = null;
+  // Traitement en batches de 8 en parallèle (même stratégie que podcasts_v2_3.html)
+  const BATCH = 8;
+  for (let i = 0; i < ARTICLE_FEEDS_CLIENT.length; i += BATCH) {
+    const batch = ARTICLE_FEEDS_CLIENT.slice(i, i + BATCH);
+    await Promise.all(batch.map(async (feed) => {
+      let today = 0, d1 = 0, d2 = 0, last = null;
+      try {
+        const xml = await fetchArticleXML(feed.url);
+        if (xml) {
+          const items      = parseArticleItems(xml);
+          const todayItems = items.filter(i => i.ts >= t0ms && i.ts <= nowMs);
+          const d1Live     = items.filter(i => i.ts >= t1ms && i.ts <  t0ms);
+          const d2Items    = items.filter(i => i.ts >= t2ms && i.ts <  t1ms);
+          today = todayItems.length;
+          // J-1 : snapshot figé si disponible, sinon flux live
+          d1    = snapMap[feed.id] !== undefined ? (snapMap[feed.id].today ?? d1Live.length) : d1Live.length;
+          d2    = d2Items.length;
+          last  = todayItems[0] || null;
+        }
+      } catch { /* erreur réseau — on laisse à 0 */ }
 
-    try {
-      const xml = await fetchArticleXML(feed.url);
-      if (xml) {
-        const items      = parseArticleItems(xml); // déjà trié du plus récent au plus ancien
-        const t0ms = t0.getTime(), t1ms = t1.getTime(), t2ms = t2.getTime(), nowMs = now.getTime();
-        const todayItems = items.filter(i => i.ts >= t0ms && i.ts <= nowMs);
-        const d1Live     = items.filter(i => i.ts >= t1ms && i.ts < t0ms);
-        const d2Items    = items.filter(i => i.ts >= t2ms && i.ts < t1ms);
-        today = todayItems.length;
-        // Pour J-1 : préférer le snapshot figé (figé à 23h59), sinon compter depuis le flux live
-        d1    = snapMap[feed.id] !== undefined ? (snapMap[feed.id].today ?? d1Live.length) : d1Live.length;
-        d2    = d2Items.length;
-        last  = todayItems[0] || null;
+      todayTotal += today;
+      d1Total    += d1;
+      d2Total    += d2;
+      allFeeds.push({ id: feed.id, name: feed.name, category: feed.category, today, d1,
+        lastDate:  last ? last.date.toISOString() : null,
+        lastTitle: last ? last.title : null,
+        feedUrl:   feed.url,
+      });
+
+      // Mise à jour immédiate de la ligne (sans attendre la fin du batch)
+      const row = document.getElementById(`art-row-${feed.id}`);
+      if (row) {
+        const active   = today > 0;
+        const d1Active = d1 > 0;
+        const timeStr  = last
+          ? last.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+          : null;
+        row.className = `monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}`;
+        row.innerHTML = `
+          <div class="monitor-dot ${active ? 'dot-green' : 'dot-gray'}"></div>
+          <div class="monitor-info">
+            <a class="monitor-name monitor-link" href="${escapeHtml(feed.url)}" target="_blank" rel="noopener">${escapeHtml(feed.name)}</a>
+            ${timeStr ? `<span class="monitor-time">${timeStr}</span>` : ''}
+            ${last ? `<span class="monitor-episode">${escapeHtml(last.title)}</span>` : ''}
+          </div>
+          <div class="art-count-j ${active   ? 'badge-active'    : 'badge-none'}">${active   ? today : '—'}</div>
+          <div class="art-count-d1 ${d1Active ? 'badge-d1-active' : 'badge-d1-none'}">${d1Active ? d1 : '—'}</div>`;
       }
-    } catch { /* erreur réseau — on laisse à 0 */ }
-
-    todayTotal += today;
-    d1Total    += d1;
-    d2Total    += d2;
-
-    const feedData = {
-      id: feed.id, name: feed.name, category: feed.category,
-      today, d1,
-      lastDate:  last ? last.date.toISOString() : null,
-      lastTitle: last ? last.title : null,
-      feedUrl:   feed.url,
-    };
-    allFeeds.push(feedData);
-
-    // Mise à jour en temps réel des totaux
+    }));
+    // Mise à jour des totaux après chaque batch
     document.getElementById('stat-art-today').textContent = todayTotal;
     document.getElementById('stat-art-d1').textContent    = d1Total;
-
-    // Mise à jour de la ligne de cette rubrique
-    const row = document.getElementById(`art-row-${feed.id}`);
-    if (row) {
-      const active   = today > 0;
-      const d1Active = d1 > 0;
-      const timeStr  = last
-        ? new Date(last.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
-        : null;
-      row.className  = `monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}`;
-      row.innerHTML  = `
-        <div class="monitor-dot ${active ? 'dot-green' : 'dot-gray'}"></div>
-        <div class="monitor-info">
-          <a class="monitor-name monitor-link" href="${escapeHtml(feed.url)}" target="_blank" rel="noopener">${escapeHtml(feed.name)}</a>
-          ${timeStr ? `<span class="monitor-time">${timeStr}</span>` : ''}
-          ${last ? `<span class="monitor-episode">${escapeHtml(last.title)}</span>` : ''}
-        </div>
-        <div class="art-count-j ${active   ? 'badge-active'    : 'badge-none'}">${active   ? today : '—'}</div>
-        <div class="art-count-d1 ${d1Active ? 'badge-d1-active' : 'badge-d1-none'}">${d1Active ? d1 : '—'}</div>`;
-    }
   }
 
   // Sauvegarde le snapshot du jour (les articles d'aujourd'hui seront J-1 demain)
