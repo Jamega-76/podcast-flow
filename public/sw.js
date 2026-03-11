@@ -2,7 +2,7 @@
    PodcastFlow - Service Worker
    ============================================ */
 
-const CACHE_NAME = 'podcastflow-v11';
+const CACHE_NAME = 'podcastflow-v12';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

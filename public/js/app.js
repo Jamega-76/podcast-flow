@@ -295,18 +295,23 @@ async function fetchArticleXML(url) {
   return null;
 }
 
-/** Parse <item> elements from RSS XML using DOMParser. */
+/** Parse <item> elements from RSS XML using DOMParser. Trie du plus récent au plus ancien. */
 function parseArticleItems(xml) {
   try {
     const doc = new DOMParser().parseFromString(xml, 'text/xml');
     return Array.from(doc.querySelectorAll('item')).map(item => {
-      const rawDate = item.querySelector('pubDate')?.textContent?.trim();
+      // Certains flux utilisent dc:date en plus de pubDate
+      const rawDate = item.querySelector('pubDate')?.textContent?.trim()
+                   || item.querySelector('date')?.textContent?.trim();
+      const ts = rawDate ? new Date(rawDate).getTime() : NaN;
       return {
         title: item.querySelector('title')?.textContent?.trim() || 'Sans titre',
         link:  item.querySelector('link')?.textContent?.trim()  || '',
-        date:  rawDate ? new Date(rawDate) : null,
+        date:  new Date(ts),
+        ts,                    // timestamp numérique — comparaison stricte
       };
-    }).filter(i => i.date && !isNaN(i.date.getTime()));
+    }).filter(i => !isNaN(i.ts))
+      .sort((a, b) => b.ts - a.ts); // plus récent en premier (RSS non garanti trié)
   } catch { return []; }
 }
 
@@ -317,9 +322,9 @@ async function loadArticlesClientSide() {
 
   _artFetchPromise = (async () => {
     const now = new Date();
-    const t0  = parisMidnightClient(now, 0); // today 00:00 Paris
-    const t1  = parisMidnightClient(now, 1); // yesterday 00:00 Paris
-    const t2  = parisMidnightClient(now, 2); // day-before 00:00 Paris
+    const t0  = new Date(); t0.setHours(0, 0, 0, 0);
+    const t1  = new Date(t0); t1.setDate(t1.getDate() - 1);
+    const t2  = new Date(t1); t2.setDate(t2.getDate() - 1);
 
     const BATCH = 8;
     const feedResults = [];
@@ -335,15 +340,16 @@ async function loadArticlesClientSide() {
       settled.forEach(r => { if (r.status === 'fulfilled') feedResults.push(r.value); });
     }
 
+    const t0ms = t0.getTime(), t1ms = t1.getTime(), t2ms = t2.getTime(), nowMs = now.getTime();
     let todayCount = 0, d1Count = 0, d2Count = 0;
     const feeds = feedResults.map(({ feed, items }) => {
-      const todayItems = items.filter(i => i.date >= t0 && i.date < now);
-      const d1Items    = items.filter(i => i.date >= t1 && i.date < t0);
-      const d2Items    = items.filter(i => i.date >= t2 && i.date < t1);
+      const todayItems = items.filter(i => i.ts >= t0ms && i.ts <= nowMs);
+      const d1Items    = items.filter(i => i.ts >= t1ms && i.ts < t0ms);
+      const d2Items    = items.filter(i => i.ts >= t2ms && i.ts < t1ms);
       todayCount += todayItems.length;
       d1Count    += d1Items.length;
       d2Count    += d2Items.length;
-      const last = todayItems[0] || null; // items already newest-first in RSS
+      const last = todayItems[0] || null; // trié du plus récent au plus ancien
       return {
         id:        feed.id,
         name:      feed.name,
@@ -443,9 +449,9 @@ window.countArticles = async function() {
   _artCache = { data: null, expiresAt: 0 };
 
   const now = new Date();
-  const t0  = parisMidnightClient(now, 0); // aujourd'hui 00:00 Paris
-  const t1  = parisMidnightClient(now, 1); // hier 00:00 Paris
-  const t2  = parisMidnightClient(now, 2); // avant-hier 00:00 Paris
+  const t0  = new Date(); t0.setHours(0, 0, 0, 0);
+  const t1  = new Date(t0); t1.setDate(t1.getDate() - 1);
+  const t2  = new Date(t1); t2.setDate(t2.getDate() - 1);
 
   // Snapshot d'hier pour les données J-1 par rubrique (figées)
   const snapYest = getArticleSnapshot(1);
@@ -478,12 +484,13 @@ window.countArticles = async function() {
     try {
       const xml = await fetchArticleXML(feed.url);
       if (xml) {
-        const items     = parseArticleItems(xml);
-        const todayItems = items.filter(i => i.date >= t0 && i.date < now);
-        const d1Live     = items.filter(i => i.date >= t1 && i.date < t0);
-        const d2Items    = items.filter(i => i.date >= t2 && i.date < t1);
+        const items      = parseArticleItems(xml); // déjà trié du plus récent au plus ancien
+        const t0ms = t0.getTime(), t1ms = t1.getTime(), t2ms = t2.getTime(), nowMs = now.getTime();
+        const todayItems = items.filter(i => i.ts >= t0ms && i.ts <= nowMs);
+        const d1Live     = items.filter(i => i.ts >= t1ms && i.ts < t0ms);
+        const d2Items    = items.filter(i => i.ts >= t2ms && i.ts < t1ms);
         today = todayItems.length;
-        // Pour J-1 : préférer le snapshot figé, sinon compter depuis le flux live
+        // Pour J-1 : préférer le snapshot figé (figé à 23h59), sinon compter depuis le flux live
         d1    = snapMap[feed.id] !== undefined ? (snapMap[feed.id].today ?? d1Live.length) : d1Live.length;
         d2    = d2Items.length;
         last  = todayItems[0] || null;
