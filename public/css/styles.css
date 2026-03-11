@@ -850,6 +850,52 @@ a { color: var(--orange); text-decoration: none; }
 .badge-active { color: var(--orange); }
 .badge-none   { color: #52525b; }
 
+/* ===== ARTICLES — Bouton Compter + colonnes J / J-1 ===== */
+.btn-count-art {
+  background: var(--orange);
+  color: #000;
+  border: none;
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.btn-count-art:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.art-cols-header {
+  display: flex;
+  align-items: center;
+  padding: 0 12px 6px;
+  gap: 10px;
+}
+.art-col-j, .art-col-d1 {
+  min-width: 36px;
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.art-col-j  { color: var(--orange); }
+.art-col-d1 { color: var(--blue); }
+
+.art-count-j, .art-count-d1 {
+  min-width: 36px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+.art-count-j.badge-active    { color: var(--orange); }
+.art-count-j.badge-none      { color: #52525b; }
+.art-count-d1.badge-d1-active { color: var(--blue); }
+.art-count-d1.badge-d1-none  { color: #52525b; }
+
 /* ===== MISC ===== */
 .bottom-spacer { height: 16px; }
 

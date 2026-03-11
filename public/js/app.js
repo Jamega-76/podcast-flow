@@ -100,7 +100,7 @@ function navigateTo(viewName) {
 
   if (viewName === 'ginette')  refreshGinette();
   if (viewName === 'home')     refreshHome();
-  if (viewName === 'articles') refreshArticles();
+  if (viewName === 'articles') initArticlesView();
   if (viewName === 'alerts')   renderAlerts();
 }
 
@@ -133,18 +133,19 @@ window.refreshGinette = async function() {
 
 async function loadGinetteStats() {
   try {
-    // Fetch podcast stats (server) + article stats (client-side browser) in parallel
-    const podProm = fetch('/api/stats');
-    const artProm = loadArticlesClientSide();
-
-    const podRes = await podProm;
+    const podRes = await fetch('/api/stats');
     if (podRes.status === 503) {
       document.getElementById('ginette-updated').textContent = 'Initialisation…';
       ginetteRetryTimer = setTimeout(loadGinetteStats, 5000);
       return;
     }
+    const pod = await podRes.json();
 
-    const [pod, artData] = await Promise.all([podRes.json(), artProm]);
+    // Articles : données du dernier comptage manuel (cache session)
+    const artTodayCount = _artCache.data?.todayCount ?? 0;
+    // J-1 articles : snapshot localStorage du jour précédent (figé) > cache session
+    const snapYest   = getArticleSnapshot(1);
+    const artD1Count = snapYest?.count ?? _artCache.data?.d1Count ?? 0;
 
     // Labels de dates
     const now  = new Date();
@@ -153,9 +154,8 @@ async function loadGinetteStats() {
     document.getElementById('tug-date-today').textContent = fmtDate(now);
     document.getElementById('tug-date-yest').textContent  = fmtDate(yest);
 
-    // Mise à jour des deux tug bars (articles depuis le navigateur = vrai compte)
-    updateTug(pod.pods.today, artData.todayCount, '');   // J
-    updateTug(pod.pods.d1,    artData.d1Count,    '-y'); // J-1
+    updateTug(pod.pods.today, artTodayCount, '');   // J
+    updateTug(pod.pods.d1,    artD1Count,    '-y'); // J-1
 
     const hm = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('ginette-updated').textContent = `Mis à jour ${hm}`;
@@ -370,45 +370,188 @@ async function loadArticlesClientSide() {
   return _artFetchPromise;
 }
 
-// ===== ARTICLES VIEW =====
-let artRetryTimer = null;
+// ===== ARTICLE SNAPSHOTS (localStorage) =====
+// Sauvegarde le comptage du jour dans localStorage pour figer J-1 le lendemain.
+// La clé est la date Paris (YYYY-MM-DD), donc le snapshot du 11/03 reste accessible le 12/03 comme J-1.
 
-window.refreshArticles = async function() {
-  const btn = document.getElementById('btn-refresh-art');
-  if (btn) { btn.style.opacity = '0.4'; btn.disabled = true; }
-  document.getElementById('art-header-updated').textContent = 'Actualisation…';
-  clearTimeout(artRetryTimer);
-  await Promise.all([loadArticleStats(), loadArticleMonitoring()]);
-  if (btn) { btn.style.opacity = ''; btn.disabled = false; }
+function getParisDateStr(daysAgo = 0) {
+  const d = new Date();
+  if (daysAgo) d.setDate(d.getDate() - daysAgo);
+  const parts = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }).split('/');
+  return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+}
+
+function saveArticleSnapshot(feeds, total) {
+  try {
+    const dateStr = getParisDateStr(0);
+    localStorage.setItem(`art_snap_${dateStr}`, JSON.stringify({
+      count: total,
+      feeds: feeds.map(f => ({ id: f.id, name: f.name, today: f.today, lastTitle: f.lastTitle, lastDate: f.lastDate })),
+      savedAt: new Date().toISOString(),
+    }));
+    // Nettoyage : on garde 7 jours
+    for (let d = 7; d <= 30; d++) localStorage.removeItem(`art_snap_${getParisDateStr(d)}`);
+  } catch { /* localStorage plein */ }
+}
+
+function getArticleSnapshot(daysAgo) {
+  try {
+    const raw = localStorage.getItem(`art_snap_${getParisDateStr(daysAgo)}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+// ===== ARTICLES VIEW =====
+
+/** Affiche l'état initial de l'onglet Articles (données en cache ou snapshot J-1). */
+function initArticlesView() {
+  // Si on a déjà compté dans cette session, afficher les résultats
+  if (_artCache.data) {
+    const d = _artCache.data;
+    document.getElementById('stat-art-today').textContent = d.todayCount;
+    document.getElementById('stat-art-d1').textContent    = d.d1Count;
+    document.getElementById('stat-art-d2').textContent    = d.d2Count;
+    renderArticleMonitoring(d.feeds);
+    const hm = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('art-header-updated').textContent = `Compté à ${hm}`;
+    const btn = document.getElementById('btn-count-articles');
+    if (btn) btn.textContent = 'Recompter';
+    return;
+  }
+  // Sinon afficher le snapshot J-1 dans la stat (sans comptage réseau)
+  const snapYest = getArticleSnapshot(1);
+  if (snapYest) {
+    document.getElementById('stat-art-d1').textContent = snapYest.count;
+  }
+  document.getElementById('art-header-updated').textContent = 'Appuie sur Compter';
+}
+
+let _artCounting = false;
+
+/** Comptage progressif rubrique par rubrique avec mise à jour en temps réel. */
+window.countArticles = async function() {
+  if (_artCounting) return;
+  _artCounting = true;
+
+  const btn       = document.getElementById('btn-count-articles');
+  const btnHeader = document.getElementById('btn-refresh-art');
+  if (btn)       { btn.disabled = true; btn.textContent = '⏳ En cours…'; }
+  if (btnHeader) { btnHeader.style.opacity = '0.4'; btnHeader.disabled = true; }
+  document.getElementById('art-header-updated').textContent = 'Comptage en cours…';
+
+  // Invalide le cache pour forcer un vrai comptage
+  _artCache = { data: null, expiresAt: 0 };
+
+  const now = new Date();
+  const t0  = parisMidnightClient(now, 0); // aujourd'hui 00:00 Paris
+  const t1  = parisMidnightClient(now, 1); // hier 00:00 Paris
+  const t2  = parisMidnightClient(now, 2); // avant-hier 00:00 Paris
+
+  // Snapshot d'hier pour les données J-1 par rubrique (figées)
+  const snapYest = getArticleSnapshot(1);
+  const snapMap  = {};
+  if (snapYest?.feeds) snapYest.feeds.forEach(f => { snapMap[f.id] = f; });
+
+  let todayTotal = 0, d1Total = 0, d2Total = 0;
+  const allFeeds = [];
+
+  // Initialise la liste avec toutes les rubriques en état "en attente"
+  const list = document.getElementById('art-monitoring-list');
+  if (list) {
+    list.innerHTML = ARTICLE_FEEDS_CLIENT.map(f => `
+      <div class="monitor-row monitor-inactive" id="art-row-${f.id}">
+        <div class="monitor-dot dot-gray"></div>
+        <div class="monitor-info"><span class="monitor-name">${escapeHtml(f.name)}</span></div>
+        <div class="art-count-j badge-none">…</div>
+        <div class="art-count-d1 badge-d1-none">${snapMap[f.id] !== undefined ? snapMap[f.id].today || '—' : '…'}</div>
+      </div>`).join('');
+  }
+
+  // Pré-affiche le total J-1 depuis le snapshot (si disponible) pendant le comptage
+  document.getElementById('stat-art-today').textContent = '0';
+  document.getElementById('stat-art-d1').textContent    = snapYest ? snapYest.count : '—';
+  document.getElementById('stat-art-d2').textContent    = '—';
+
+  for (const feed of ARTICLE_FEEDS_CLIENT) {
+    let today = 0, d1 = 0, d2 = 0, last = null;
+
+    try {
+      const xml = await fetchArticleXML(feed.url);
+      if (xml) {
+        const items     = parseArticleItems(xml);
+        const todayItems = items.filter(i => i.date >= t0 && i.date < now);
+        const d1Live     = items.filter(i => i.date >= t1 && i.date < t0);
+        const d2Items    = items.filter(i => i.date >= t2 && i.date < t1);
+        today = todayItems.length;
+        // Pour J-1 : préférer le snapshot figé, sinon compter depuis le flux live
+        d1    = snapMap[feed.id] !== undefined ? (snapMap[feed.id].today ?? d1Live.length) : d1Live.length;
+        d2    = d2Items.length;
+        last  = todayItems[0] || null;
+      }
+    } catch { /* erreur réseau — on laisse à 0 */ }
+
+    todayTotal += today;
+    d1Total    += d1;
+    d2Total    += d2;
+
+    const feedData = {
+      id: feed.id, name: feed.name, category: feed.category,
+      today, d1,
+      lastDate:  last ? last.date.toISOString() : null,
+      lastTitle: last ? last.title : null,
+      feedUrl:   feed.url,
+    };
+    allFeeds.push(feedData);
+
+    // Mise à jour en temps réel des totaux
+    document.getElementById('stat-art-today').textContent = todayTotal;
+    document.getElementById('stat-art-d1').textContent    = d1Total;
+
+    // Mise à jour de la ligne de cette rubrique
+    const row = document.getElementById(`art-row-${feed.id}`);
+    if (row) {
+      const active   = today > 0;
+      const d1Active = d1 > 0;
+      const timeStr  = last
+        ? new Date(last.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+        : null;
+      row.className  = `monitor-row ${active ? 'monitor-active' : 'monitor-inactive'}`;
+      row.innerHTML  = `
+        <div class="monitor-dot ${active ? 'dot-green' : 'dot-gray'}"></div>
+        <div class="monitor-info">
+          <a class="monitor-name monitor-link" href="${escapeHtml(feed.url)}" target="_blank" rel="noopener">${escapeHtml(feed.name)}</a>
+          ${timeStr ? `<span class="monitor-time">${timeStr}</span>` : ''}
+          ${last ? `<span class="monitor-episode">${escapeHtml(last.title)}</span>` : ''}
+        </div>
+        <div class="art-count-j ${active   ? 'badge-active'    : 'badge-none'}">${active   ? today : '—'}</div>
+        <div class="art-count-d1 ${d1Active ? 'badge-d1-active' : 'badge-d1-none'}">${d1Active ? d1 : '—'}</div>`;
+    }
+  }
+
+  // Sauvegarde le snapshot du jour (les articles d'aujourd'hui seront J-1 demain)
+  saveArticleSnapshot(allFeeds, todayTotal);
+
+  // Met en cache le résultat complet
+  _artCache = {
+    data: { todayCount: todayTotal, d1Count: d1Total, d2Count: d2Total, feeds: allFeeds },
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  };
+
+  document.getElementById('stat-art-d2').textContent = d2Total;
+  const activeCount = allFeeds.filter(f => f.today > 0).length;
+  const counter = document.getElementById('art-monitoring-active');
+  if (counter) counter.textContent = `${activeCount} / ${allFeeds.length} actifs`;
+
+  const hm = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('art-header-updated').textContent = `Compté à ${hm}`;
+
+  if (btn)       { btn.disabled = false; btn.textContent = 'Recompter'; }
+  if (btnHeader) { btnHeader.style.opacity = ''; btnHeader.disabled = false; }
+  _artCounting = false;
 };
 
-async function loadArticleStats() {
-  try {
-    // Articles are fetched client-side (browser → CORS proxy → europe1.fr)
-    // This bypasses Railway datacenter IP blocking by Cloudflare
-    const data = await loadArticlesClientSide();
-    document.getElementById('stat-art-today').textContent = data.todayCount;
-    document.getElementById('stat-art-d1').textContent    = data.d1Count;
-    document.getElementById('stat-art-d2').textContent    = data.d2Count;
-    const hm = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    document.getElementById('art-header-updated').textContent = `Mis à jour ${hm}`;
-  } catch (e) {
-    console.error('loadArticleStats error:', e.message);
-    document.getElementById('art-header-updated').textContent = 'Erreur de chargement';
-  }
-}
-
-async function loadArticleMonitoring() {
-  try {
-    const data = await loadArticlesClientSide();
-    renderArticleMonitoring(data.feeds);
-  } catch (e) {
-    console.error('loadArticleMonitoring error:', e.message);
-  }
-}
-
 function renderArticleMonitoring(feeds) {
-  const list = document.getElementById('art-monitoring-list');
+  const list    = document.getElementById('art-monitoring-list');
   const counter = document.getElementById('art-monitoring-active');
   if (!list) return;
 
@@ -416,8 +559,9 @@ function renderArticleMonitoring(feeds) {
   if (counter) counter.textContent = `${activeCount} / ${feeds.length} actifs`;
 
   list.innerHTML = feeds.map(f => {
-    const active = f.today > 0;
-    const timeStr = f.lastDate
+    const active   = f.today > 0;
+    const d1Active = (f.d1 ?? 0) > 0;
+    const timeStr  = f.lastDate
       ? new Date(f.lastDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
       : null;
     const nameEl = f.feedUrl
@@ -431,9 +575,8 @@ function renderArticleMonitoring(feeds) {
           ${timeStr ? `<span class="monitor-time">${timeStr}</span>` : ''}
           ${f.lastTitle ? `<span class="monitor-episode">${escapeHtml(f.lastTitle)}</span>` : ''}
         </div>
-        <div class="monitor-badge ${active ? 'badge-active' : 'badge-none'}">
-          ${active ? f.today : '—'}
-        </div>
+        <div class="art-count-j ${active   ? 'badge-active'    : 'badge-none'}">${active   ? f.today : '—'}</div>
+        <div class="art-count-d1 ${d1Active ? 'badge-d1-active' : 'badge-d1-none'}">${d1Active ? f.d1 : '—'}</div>
       </div>`;
   }).join('');
 }
